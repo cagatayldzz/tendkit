@@ -1,12 +1,14 @@
 use super::{
-  components::{green, orange, pill, selection_checkbox, tool_icon},
+  components::{green, orange, selection_checkbox, tool_icon},
   Destination, Workspace,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
   component::{
     button::{Button, ButtonVariants},
-    h_flex, v_flex, ActiveTheme, Disableable, Icon, IconName, Sizable,
+    h_flex,
+    tag::Tag,
+    v_flex, ActiveTheme, Disableable, Icon, IconName, Sizable,
   },
   *,
 };
@@ -105,7 +107,7 @@ impl Workspace {
                     .child(div().text_size(px(13.)).font_weight(FontWeight::MEDIUM).truncate().child(tool.name))
                     .child(div().text_size(px(11.)).text_color(status_color).truncate().child(status)),
                 )
-                .when(has_update, |this| this.child(pill("Update", orange())))
+                .when(has_update, |this| this.child(Tag::warning().small().child("Update")))
                 .child(selection_checkbox(&self.model, tool, false, cx)),
             ),
           );

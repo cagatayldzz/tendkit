@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "TendKit per-user files: paths, caches, window size, and OpenCommit configuration"
 
 [package.metadata.layers]

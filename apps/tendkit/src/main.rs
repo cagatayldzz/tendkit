@@ -66,7 +66,12 @@ fn main() {
       async {}
     })
     .detach();
-    model.update(cx, |model, cx| model.scan(cx));
+    model.update(cx, |model, cx| {
+      model.scan(cx);
+      if model.settings.check_app_updates {
+        model.check_app_update(cx);
+      }
+    });
   });
 }
 

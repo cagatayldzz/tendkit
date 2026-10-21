@@ -1,10 +1,11 @@
 use super::{
-  components::{caption, green, orange, selection_checkbox, status_summary, tool_icon, tool_tint},
+  components::{caption, green, orange, selection_checkbox, status_tag, tool_icon, tool_tint},
   Workspace,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
   component::{
+    alert::Alert,
     button::{Button, ButtonVariants},
     h_flex, v_flex, ActiveTheme, Disableable, Icon, IconName, Sizable,
   },
@@ -145,7 +146,7 @@ impl Workspace {
       .child(filters);
 
     if let Some(error) = error {
-      body = body.child(div().p_3().rounded(px(10.)).bg(orange().opacity(0.08)).text_color(orange()).text_size(px(12.)).child(error));
+      body = body.child(Alert::error("catalog-error", error));
     }
     if show_progress {
       body = body.child(self.render_progress(cx));
@@ -215,7 +216,8 @@ impl Workspace {
     let id = tool.id;
     let selected = self.model.read(cx).selected.contains(id);
     let model = self.model.read(cx);
-    let (status, color) = status_summary(model, tool, cx);
+    let tag = status_tag(model, tool);
+    let version = tool.installed_version().map(|v| format!("v{v}"));
     let has_update = model.has_update(tool);
     let can_update = has_update && model.can_manage(tool) && id != "npm" && !model.busy();
 
@@ -257,8 +259,8 @@ impl Workspace {
           .pt_3()
           .border_t_1()
           .border_color(theme.border.opacity(0.6))
-          .child(div().size(px(5.)).rounded_full().bg(color))
-          .child(div().min_w_0().truncate().text_size(px(11.)).text_color(color).child(status))
+          .child(tag)
+          .child(div().min_w_0().truncate().child(caption(version.unwrap_or_default(), cx)))
           .child(div().flex_1())
           .when(can_update, |this| {
             let update_model = self.model.clone();

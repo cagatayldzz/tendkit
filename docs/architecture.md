@@ -9,8 +9,9 @@ listed, on missing rules for new crates, and on workspace cycles.
 
 ```text
 apps/tendkit ──► ui ──► model ──► client ──┐
-        │          │       └────► storage   ├──► protocol
-        └──────────┴────────────► storage   │
+        │          │       ├────► storage   ├──► protocol
+        │          │       ├────► updater ──► version
+        └──────────┴───────┴────► storage   │
                                             │
 apps/tendkit-engine ──► execute ──► plan ──► detect ──► process ──┘
                            └──► shellrc
@@ -20,9 +21,11 @@ apps/tendkit-engine ──► execute ──► plan ──► detect ──► 
 | --- | --- | --- |
 | `protocol` | `InstallPlan`, `InstallStep`, `Recipe`, `Installation`, events, `EventDecoder`, `EngineRequest` | serde |
 | `storage` | data directory, atomic writes, latest-version cache, window size, OpenCommit config, zsh instruction block | serde |
+| `version` | numeric version comparison | none |
+| `updater` | release lookup, download, verification, bundle swap | version |
 | `client` | `EngineConnection` (spawn, cancel, acknowledge, watchdog), `EventValidator` | protocol |
-| `model` | `AppModel`, `ToolRow`, scan/plan/execute state | client, storage, protocol, gpui-kit |
-| `ui` | `Workspace`, views, assets, `platform` helpers, actions | model, storage, protocol, gpui-kit |
+| `model` | `AppModel`, `ToolRow`, tool update status, scan/plan/execute state, app update state | client, storage, updater, version, protocol, gpui-kit |
+| `ui` | `Workspace` (Sidebar, StatusBar, Settings, Tag, Alert, Notification from GPUI Kit), assets, `platform` helpers, actions | model, storage, updater, protocol, gpui-kit |
 | `process` | `Control` (cancel/continue), `command`, `curl`, `search_dirs`, `Sink` | protocol |
 | `detect` | tool registry (`TOOLS`), detection, version parsing | process, protocol |
 | `plan` | recipe selection, dependency order, release resolution, `manageable` | detect, process, protocol |

@@ -1,7 +1,9 @@
 //! Application state: the tool catalog, scanning, planning, and execution, driven
 //! by engine events and observed by the interface.
 
-mod version;
+mod app_update;
+
+pub use app_update::{AppUpdate, APP_VERSION};
 
 use futures::{channel::mpsc, StreamExt};
 use gpui_kit::*;
@@ -13,7 +15,8 @@ use std::{
 };
 use tendkit_client::{EngineConnection, Request};
 use tendkit_protocol::{EngineEvent, EngineFailure, EventType, InstallPlan, Installation, RunStatus, StepStatus, TOOL_IDS};
-use tendkit_storage::LatestVersionCache;
+use tendkit_storage::{AppSettings, LatestVersionCache};
+use tendkit_updater::{Release, Staged};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToolCategory {
@@ -146,6 +149,11 @@ pub struct AppModel {
   pub run_status: Option<RunStatus>,
   pub installer_path: Option<PathBuf>,
   pub pending_termination: bool,
+  pub settings: AppSettings,
+  pub app_update: AppUpdate,
+  pub app_update_checked: Option<SystemTime>,
+  last_release: Option<Release>,
+  staged: Option<Staged>,
   latest_cache: LatestVersionCache,
   /// Failed lookups back off so a rate-limited endpoint is not retried on every tool selection.
   latest_failed_at: HashMap<String, SystemTime>,
@@ -161,6 +169,7 @@ impl Default for AppModel {
 
 impl AppModel {
   pub fn new() -> Self {
+    let settings = AppSettings::load(&AppSettings::default_path());
     Self {
       tools: TOOL_IDS.iter().map(|id| ToolRow::new(id)).collect(),
       is_scanning: false,
@@ -173,7 +182,7 @@ impl AppModel {
       checking_latest: HashSet::new(),
       last_update_check: None,
       selected: BTreeSet::new(),
-      configure_shell: true,
+      configure_shell: settings.configure_shell,
       is_planning: false,
       is_executing: false,
       is_cancelling: false,
@@ -184,6 +193,11 @@ impl AppModel {
       run_status: None,
       installer_path: None,
       pending_termination: false,
+      settings,
+      app_update: AppUpdate::Idle,
+      app_update_checked: None,
+      last_release: None,
+      staged: None,
       latest_cache: LatestVersionCache::load(LatestVersionCache::default_path()),
       latest_failed_at: HashMap::new(),
       latest_generation: 0,
@@ -216,7 +230,7 @@ impl AppModel {
     Some(if self.checking_latest.contains(tool.id) {
       UpdateStatus::Checking
     } else if let Some(latest) = self.latest_versions.get(tool.id) {
-      if version::is_newer(latest, installed) {
+      if tendkit_version::is_newer(latest, installed) {
         UpdateStatus::Available { installed: installed.into(), latest: latest.clone() }
       } else {
         UpdateStatus::UpToDate

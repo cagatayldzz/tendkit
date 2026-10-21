@@ -1,4 +1,4 @@
-//! Version comparison for update detection.
+//! Version comparison for update detection, shared by tool and app updates.
 
 /// Whether `latest` is a newer release than `installed`. Versions compare by
 /// their numeric components; anything that does not parse is never "newer", so

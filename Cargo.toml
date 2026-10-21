@@ -8,6 +8,7 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 license = "UNLICENSED"
+repository = "https://github.com/cagatayldzz/tendkit"
 
 [workspace.dependencies]
 tendkit-protocol = { path = "crates/protocol" }
@@ -18,6 +19,8 @@ tendkit-detect = { path = "crates/detect" }
 tendkit-plan = { path = "crates/plan" }
 tendkit-shellrc = { path = "crates/shellrc" }
 tendkit-execute = { path = "crates/execute" }
+tendkit-version = { path = "crates/version" }
+tendkit-updater = { path = "crates/updater" }
 tendkit-model = { path = "crates/model" }
 tendkit-ui = { path = "crates/ui" }
 futures = "0.3"

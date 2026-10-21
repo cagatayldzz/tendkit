@@ -10,6 +10,7 @@ mod platform;
 mod progress;
 mod settings;
 mod sidebar;
+mod status_bar;
 mod tool_detail;
 mod tool_list;
 
@@ -24,7 +25,7 @@ use gpui_kit::{
   *,
 };
 use std::time::SystemTime;
-use tendkit_model::AppModel;
+use tendkit_model::{AppModel, AppUpdate};
 
 pub use assets::Assets;
 
@@ -92,6 +93,11 @@ pub struct Workspace {
   focused_tool: Option<&'static str>,
   /// The tool and scan state the latest version was last requested for.
   latest_request: Option<(&'static str, bool, Option<SystemTime>)>,
+  /// Bumped to reopen the settings on a chosen page, since the component keeps its own selection.
+  settings_epoch: u64,
+  settings_page: usize,
+  /// The release the user was last notified about, so each one is announced once.
+  notified_update: Option<String>,
   focus_handle: FocusHandle,
   _subscriptions: Vec<Subscription>,
 }
@@ -112,6 +118,7 @@ impl Workspace {
         if model.read(cx).show_plan && !window.has_active_dialog(cx) {
           this.open_plan(window, cx);
         }
+        this.announce_app_update(window, cx);
         cx.notify();
       }),
     ];
@@ -124,6 +131,9 @@ impl Workspace {
       search,
       focused_tool: None,
       latest_request: None,
+      settings_epoch: 0,
+      settings_page: 0,
+      notified_update: None,
       focus_handle,
       _subscriptions: subscriptions,
     }
@@ -150,6 +160,30 @@ impl Workspace {
       })
       .cloned()
       .collect()
+  }
+
+  /// Shows a notification once for each newly found TendKit release.
+  fn announce_app_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    let AppUpdate::Available(release) = self.model.read(cx).app_update.clone() else { return };
+    if self.notified_update.as_deref() == Some(release.version.as_str()) {
+      return;
+    }
+    self.notified_update = Some(release.version.clone());
+    window.push_notification(
+      component::notification::Notification::info(format!(
+        "TendKit {} is ready to download. Open Settings → Updates to install it.",
+        release.version
+      ))
+      .title("Update available"),
+      cx,
+    );
+  }
+
+  /// Opens the settings on the given page (see `settings::PAGE_*`).
+  pub(crate) fn open_settings(&mut self, page: usize, cx: &mut Context<Self>) {
+    self.settings_epoch += 1;
+    self.settings_page = page;
+    self.navigate(Destination::Settings, cx);
   }
 
   fn navigate(&mut self, destination: Destination, cx: &mut Context<Self>) {
@@ -248,7 +282,8 @@ impl Render for Workspace {
     } else {
       h_flex().size_full().child(self.render_tool_list(cx)).child(self.render_detail(window, cx)).into_any_element()
     };
-    h_flex()
+    let status_bar = self.render_status_bar(cx);
+    v_flex()
       .id("workspace")
       .key_context(CONTEXT)
       .track_focus(&self.focus_handle)
@@ -257,7 +292,14 @@ impl Render for Workspace {
       .size_full()
       .bg(theme.background)
       .text_color(theme.foreground)
-      .child(self.render_sidebar(cx))
-      .child(v_flex().flex_1().min_w_0().h_full().child(self.toolbar(cx)).child(div().flex_1().min_h_0().w_full().child(content)))
+      .child(
+        h_flex()
+          .flex_1()
+          .min_h_0()
+          .w_full()
+          .child(self.render_sidebar(cx))
+          .child(v_flex().flex_1().min_w_0().h_full().child(self.toolbar(cx)).child(div().flex_1().min_h_0().w_full().child(content))),
+      )
+      .child(status_bar)
   }
 }

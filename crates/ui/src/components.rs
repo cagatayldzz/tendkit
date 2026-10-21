@@ -1,3 +1,4 @@
+use gpui_kit::component::tag::Tag;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
   component::{checkbox::Checkbox, ActiveTheme, Disableable, Icon, Sizable},
@@ -82,35 +83,22 @@ pub fn mono(text: impl Into<SharedString>) -> Div {
   div().font_family("Menlo").child(text.into())
 }
 
-/// One-line status for a tool: its install state and, for installed tools, whether
-/// a newer version is available. Returns the text and its color.
-pub fn status_summary(model: &AppModel, tool: &ToolRow, cx: &App) -> (String, Hsla) {
-  let muted = cx.theme().muted_foreground;
+/// A status tag for a tool: installed state, or update availability for installed tools.
+pub fn status_tag(model: &AppModel, tool: &ToolRow) -> Tag {
   if !tool.scanned {
-    return ("Waiting for scan".into(), muted);
+    return Tag::secondary().small().child("Waiting for scan");
   }
-  let Some(version) = tool.installed_version() else {
-    return if tool.installations.is_empty() { ("Not installed".into(), muted) } else { ("Needs attention".into(), orange()) };
-  };
+  if tool.installed_version().is_none() {
+    return if tool.installations.is_empty() {
+      Tag::secondary().small().child("Not installed")
+    } else {
+      Tag::danger().small().child("Needs attention")
+    };
+  }
   match model.update_status(tool) {
-    // npm ships with Node.js, so it has no update action of its own.
-    Some(UpdateStatus::Available { installed, latest }) if tool.id == "npm" => (format!("Updates with Node.js · {installed} → {latest}"), orange()),
-    Some(UpdateStatus::Available { installed, latest }) => (format!("Update available · {installed} → {latest}"), orange()),
-    Some(UpdateStatus::UpToDate) => (format!("Up to date · {version}"), green()),
-    Some(UpdateStatus::Checking) => (format!("Installed · {version} · Checking for updates…"), muted),
-    _ => (format!("Installed · {version}"), green()),
+    Some(UpdateStatus::Available { installed, latest }) => Tag::warning().small().child(format!("{installed} → {latest}")),
+    Some(UpdateStatus::UpToDate) => Tag::success().small().child("Up to date"),
+    Some(UpdateStatus::Checking) => Tag::secondary().small().child("Checking…"),
+    _ => Tag::info().small().child("Installed"),
   }
-}
-
-/// A compact orange pill, e.g. the update count on a navigation card.
-pub fn pill(text: impl Into<SharedString>, color: Hsla) -> Div {
-  div()
-    .px(px(7.))
-    .py(px(2.))
-    .rounded_full()
-    .bg(color.opacity(0.14))
-    .text_color(color)
-    .text_size(px(10.))
-    .font_weight(FontWeight::SEMIBOLD)
-    .child(text.into())
 }

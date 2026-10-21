@@ -6240,6 +6240,8 @@ dependencies = [
  "tendkit-client",
  "tendkit-protocol",
  "tendkit-storage",
+ "tendkit-updater",
+ "tendkit-version",
 ]
 
 [[package]]
@@ -6291,7 +6293,20 @@ dependencies = [
  "tendkit-model",
  "tendkit-protocol",
  "tendkit-storage",
+ "tendkit-updater",
 ]
+
+[[package]]
+name = "tendkit-updater"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tendkit-version",
+]
+
+[[package]]
+name = "tendkit-version"
+version = "0.1.0"
 
 [[package]]
 name = "tendril"

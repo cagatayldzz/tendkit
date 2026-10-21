@@ -1,10 +1,11 @@
 use super::{
-  components::{caption, card, green, mono, orange, selection_checkbox, tool_icon},
+  components::{caption, card, mono, orange, selection_checkbox, status_tag, tool_icon},
   Workspace,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
   component::{
+    alert::Alert,
     button::{Button, ButtonVariants},
     h_flex,
     spinner::Spinner,
@@ -28,17 +29,7 @@ impl Workspace {
 
     let mut body = v_flex().w_full().max_w(px(760.)).gap(px(24.)).p(px(30.));
     if let Some(error) = error {
-      body = body.child(
-        h_flex()
-          .gap_2()
-          .p(px(14.))
-          .rounded(px(12.))
-          .bg(orange().opacity(0.08))
-          .text_size(px(13.))
-          .text_color(orange())
-          .child(Icon::new(IconName::TriangleAlert).size(px(14.)))
-          .child(div().flex_1().child(error)),
-      );
+      body = body.child(Alert::error("detail-error", error));
     }
     body = match &focused {
       Some(tool) => body.child(self.tool_details(tool, window, cx)),
@@ -203,23 +194,7 @@ impl Workspace {
   }
 
   fn status(&self, tool: &ToolRow, cx: &App) -> Div {
-    let theme = cx.theme();
-    let (icon, label, color): (Icon, &str, Hsla) = if !tool.scanned {
-      (Icon::new(IconName::Ellipsis), if self.model.read(cx).is_scanning { "Scanning" } else { "Pending" }, theme.muted_foreground)
-    } else if let Some(installation) = tool.primary() {
-      if installation.version.is_some() {
-        if self.model.read(cx).has_update(tool) {
-          (Icon::new(IconName::ArrowUp), "Update available", orange())
-        } else {
-          (Icon::new(IconName::CircleCheck), "Installed", green())
-        }
-      } else {
-        (Icon::new(IconName::CircleAlert), "Needs attention", orange())
-      }
-    } else {
-      (Icon::new(Lucide::CircleArrowDown), "Not installed", theme.muted_foreground)
-    };
-    h_flex().gap(px(6.)).text_color(color).child(icon.size(px(13.))).child(label)
+    div().child(status_tag(self.model.read(cx), tool))
   }
 
   fn latest_version(&self, tool: &ToolRow, cx: &mut Context<Self>) -> Div {

@@ -51,7 +51,9 @@ The Cargo workspace separates executables (`apps/`) from libraries (`crates/`):
 | `apps/tendkit-engine` | installation engine executable |
 | `crates/protocol` | engine wire models and event decoding |
 | `crates/client` | engine process connection and event validation |
-| `crates/storage` | per-user files: caches, window size, OpenCommit config |
+| `crates/storage` | per-user files: caches, window size, app settings, OpenCommit config |
+| `crates/updater` | TendKit self-update from GitHub releases |
+| `crates/version` | version comparison |
 | `crates/model` | application state (`AppModel`) |
 | `crates/ui` | views built with [GPUI Kit](https://gpui-kit.com) |
 | `crates/process` | supervised commands, downloads, search paths |
@@ -69,6 +71,16 @@ Tests never install or modify real tools. To query the engine directly:
 printf '%s\n' '{"protocol_version":1,"request_id":"manual","command":"scan"}' \
   | target/debug/tendkit-engine
 ```
+
+## Updating TendKit
+
+Settings → Updates checks the latest GitHub release (on launch, unless turned
+off, and on demand). Nothing is downloaded until you choose **Download & Install**.
+The download must match the published `SHA256SUMS.txt`, carry a valid code
+signature that macOS accepts (notarized), and be signed by the same developer
+as the installed app. **Restart to Update** then swaps the app bundle and
+reopens TendKit; a failed swap restores the previous version. The folder
+containing TendKit.app must be writable.
 
 ## Releases
 

@@ -23,7 +23,7 @@ dependency direction is enforced by `bun run check:layers`:
   nothing else in the workspace.
 - Engine layers: `process` → `detect` → `plan` → `execute` (plus `shellrc`).
   They never depend on the client, model, or UI crates.
-- Application layers: `storage` and `client` → `model` → `ui`. They never depend
+- Application layers: `storage`, `client`, and `updater` (→ `version`) → `model` → `ui`. They never depend
   on the engine crates.
 - Every package declares its allowed dependencies in
   `[package.metadata.layers]`. Define the layer decision for each new crate or

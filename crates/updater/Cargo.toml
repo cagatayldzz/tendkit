@@ -1,0 +1,19 @@
+[package]
+name = "tendkit-updater"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "TendKit self-update from GitHub releases"
+
+[package.metadata.layers]
+# Layer check (`bun run check:layers`): the dependencies this package may use.
+dependencies = ["tendkit-version", "serde_json"]
+
+[lints]
+workspace = true
+
+[dependencies]
+tendkit-version.workspace = true
+serde_json.workspace = true
