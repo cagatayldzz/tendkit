@@ -31,9 +31,30 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-  # Clippy and the tests compile separately (check vs. build artifacts), so they
-  # run side by side instead of one after the other.
-  clippy:
+  # Everything except the GPUI crates is plain Rust and builds on Linux in seconds,
+  # without waiting for a macOS runner.
+  core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup default stable
+      # shellrc's tests source a generated file in a real zsh.
+      - run: sudo apt-get install -y --no-install-recommends zsh
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Lint
+        run: cargo clippy --locked --workspace --exclude tendkit --exclude tendkit-ui --exclude tendkit-model --all-targets -- -D warnings
+      - name: Test
+        run: |
+          cargo build --locked -p tendkit-engine
+          cargo test --locked --workspace --exclude tendkit --exclude tendkit-ui --exclude tendkit-model
+
+  # The GPUI crates (model, ui, and the app) need macOS, the only platform TendKit
+  # ships on. One job instead of two means waiting for one macOS runner, not two.
+  app:
     # TendKit targets Apple Silicon only, so build on the same architecture.
     runs-on: macos-26
     timeout-minutes: 20
@@ -45,20 +66,9 @@ jobs:
       # Pull requests read the cache that main builds.
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: clippy
+          shared-key: app
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Lint
-        run: cargo clippy --locked --workspace --all-targets -- -D warnings
-
-  test:
-    runs-on: macos-26
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v6
-      - run: rustup default stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: test
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Test the Rust workspace
-        run: bash scripts/test.sh
+        run: cargo clippy --locked -p tendkit -p tendkit-ui -p tendkit-model --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --locked -p tendkit -p tendkit-ui -p tendkit-model
