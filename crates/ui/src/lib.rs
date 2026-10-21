@@ -59,24 +59,27 @@ fn apply_theme(window: &mut Window, cx: &mut App) {
 pub enum Destination {
   AllTools,
   Installed,
+  Updates,
   Settings,
 }
 
 impl Destination {
-  pub const ALL: [Self; 3] = [Self::AllTools, Self::Installed, Self::Settings];
+  pub const ALL: [Self; 4] = [Self::AllTools, Self::Installed, Self::Updates, Self::Settings];
 
   pub fn title(self) -> &'static str {
     match self {
       Self::AllTools => "All Tools",
       Self::Installed => "Installed",
+      Self::Updates => "Updates",
       Self::Settings => "Settings",
     }
   }
 
-  pub fn includes(self, tool: &tendkit_model::ToolRow) -> bool {
+  pub fn includes(self, tool: &tendkit_model::ToolRow, model: &AppModel) -> bool {
     match self {
       Self::AllTools | Self::Settings => true,
       Self::Installed => tool.installed_version().is_some(),
+      Self::Updates => model.has_update(tool),
     }
   }
 }
@@ -138,7 +141,7 @@ impl Workspace {
       .iter()
       .flat_map(|category| model.tools.iter().filter(move |t| t.category() == *category))
       .filter(|tool| {
-        self.destination.includes(tool) && (self.destination != Destination::AllTools || self.catalog_filter.includes(tool)) && {
+        self.destination.includes(tool, model) && (self.destination != Destination::AllTools || self.catalog_filter.includes(tool, model)) && {
           query.is_empty() || {
             let haystack = format!("{} {} {}", tool.name, tool.subtitle, tool.primary().map(|i| i.source.as_str()).unwrap_or(""));
             haystack.to_lowercase().contains(&query)
@@ -193,6 +196,7 @@ impl Workspace {
     let theme = cx.theme().clone();
     let subtitle = match self.destination {
       Destination::Settings => "Preferences".to_string(),
+      Destination::Updates => format!("{} available", self.visible_tools(cx).len()),
       _ => format!("{} tools", self.visible_tools(cx).len()),
     };
     let busy = self.model.read(cx).busy();
@@ -224,7 +228,7 @@ impl Workspace {
                 .ghost()
                 .small()
                 .icon(IconName::RefreshCw)
-                .tooltip("Clear cached versions and scan your developer environment")
+                .tooltip("Rescan your tools and check for updates")
                 .disabled(busy)
                 .on_click(|_, window, cx| window.dispatch_action(Box::new(ScanAgain), cx)),
             )

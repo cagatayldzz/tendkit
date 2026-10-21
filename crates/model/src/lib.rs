@@ -1,6 +1,8 @@
 //! Application state: the tool catalog, scanning, planning, and execution, driven
 //! by engine events and observed by the interface.
 
+mod version;
+
 use futures::{channel::mpsc, StreamExt};
 use gpui_kit::*;
 use std::{
@@ -84,6 +86,21 @@ impl ToolRow {
   }
 }
 
+/// Whether an installed tool has a newer release, from the latest-version lookups.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UpdateStatus {
+  /// The latest version has not been looked up yet.
+  Unknown,
+  Checking,
+  UpToDate,
+  Available {
+    installed: String,
+    latest: String,
+  },
+  /// The lookup failed, for example when offline or rate limited.
+  Unavailable,
+}
+
 #[derive(Clone, Debug)]
 pub struct StepOutcome {
   pub status: StepStatus,
@@ -115,6 +132,8 @@ pub struct AppModel {
   pub latest_versions: HashMap<String, String>,
   pub latest_version_errors: HashMap<String, String>,
   pub checking_latest: HashSet<String>,
+  /// When the last full round of latest-version lookups finished.
+  pub last_update_check: Option<SystemTime>,
   pub selected: BTreeSet<String>,
   pub configure_shell: bool,
   pub is_planning: bool,
@@ -152,6 +171,7 @@ impl AppModel {
       latest_versions: HashMap::new(),
       latest_version_errors: HashMap::new(),
       checking_latest: HashSet::new(),
+      last_update_check: None,
       selected: BTreeSet::new(),
       configure_shell: true,
       is_planning: false,
@@ -188,6 +208,55 @@ impl AppModel {
   }
   pub fn can_manage(&self, tool: &ToolRow) -> bool {
     tool.scanned && tool.manageable
+  }
+
+  /// The update state of an installed tool; `None` when it is not installed.
+  pub fn update_status(&self, tool: &ToolRow) -> Option<UpdateStatus> {
+    let installed = tool.installed_version()?;
+    Some(if self.checking_latest.contains(tool.id) {
+      UpdateStatus::Checking
+    } else if let Some(latest) = self.latest_versions.get(tool.id) {
+      if version::is_newer(latest, installed) {
+        UpdateStatus::Available { installed: installed.into(), latest: latest.clone() }
+      } else {
+        UpdateStatus::UpToDate
+      }
+    } else if self.latest_version_errors.contains_key(tool.id) {
+      UpdateStatus::Unavailable
+    } else {
+      UpdateStatus::Unknown
+    })
+  }
+
+  pub fn has_update(&self, tool: &ToolRow) -> bool {
+    matches!(self.update_status(tool), Some(UpdateStatus::Available { .. }))
+  }
+
+  /// Tools with an update that TendKit can apply. npm updates with Node.js.
+  pub fn updatable_ids(&self) -> BTreeSet<String> {
+    self.tools.iter().filter(|t| t.id != "npm" && self.can_manage(t) && self.has_update(t)).map(|t| t.id.to_string()).collect()
+  }
+
+  pub fn update_count(&self) -> usize {
+    self.tools.iter().filter(|t| self.has_update(t)).count()
+  }
+
+  pub fn is_checking_updates(&self) -> bool {
+    !self.checking_latest.is_empty()
+  }
+
+  /// Looks up the latest version of every installed tool.
+  pub fn check_all_latest(&mut self, force: bool, cx: &mut Context<Self>) {
+    let ids: Vec<_> = self.tools.iter().filter(|t| t.installed_version().is_some()).map(|t| t.id).collect();
+    for id in ids {
+      self.check_latest_version(id, force, cx);
+    }
+  }
+
+  /// Plans an update of every tool that has one.
+  pub fn update_all(&mut self, cx: &mut Context<Self>) {
+    let ids = self.updatable_ids();
+    self.prepare(Some(ids), cx);
   }
 
   pub fn toggle_selected(&mut self, id: &str, selected: bool, cx: &mut Context<Self>) {
@@ -281,6 +350,9 @@ impl AppModel {
           return;
         }
         model.checking_latest.remove(&done_tool);
+        if model.checking_latest.is_empty() {
+          model.last_update_check = Some(SystemTime::now());
+        }
         let Err(error) = result else { return };
         model.latest_failed_at.insert(key.clone(), SystemTime::now());
         // Prefer an expired cached version over no answer, e.g. when rate limited.
@@ -328,10 +400,13 @@ impl AppModel {
       Request::new("scan"),
       cx,
       |model, event, _| model.receive(event, Operation::Scan),
-      |model, result, _| {
+      |model, result, cx| {
         model.is_scanning = false;
         match result {
-          Ok(()) => model.last_scan = Some(SystemTime::now()),
+          Ok(()) => {
+            model.last_scan = Some(SystemTime::now());
+            model.check_all_latest(false, cx);
+          }
           Err(error) => {
             model.error = Some(error.to_string());
             model.log.push(format!("Error: {error}"));

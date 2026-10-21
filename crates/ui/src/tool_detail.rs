@@ -14,7 +14,7 @@ use gpui_kit::{
 };
 use gpui_kit_assets::IconName as Lucide;
 use std::collections::BTreeSet;
-use tendkit_model::ToolRow;
+use tendkit_model::{ToolRow, UpdateStatus};
 
 impl Workspace {
   pub(super) fn render_detail(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -114,6 +114,40 @@ impl Workspace {
     });
 
     let id = tool.id;
+    let update_callout = match model.update_status(tool) {
+      Some(UpdateStatus::Available { installed, latest }) => {
+        let update_model = self.model.clone();
+        let updatable = id != "npm" && model.can_manage(tool);
+        Some(
+          h_flex()
+            .gap_3()
+            .p(px(14.))
+            .rounded(px(12.))
+            .bg(orange().opacity(0.08))
+            .border_1()
+            .border_color(orange().opacity(0.35))
+            .child(Icon::new(IconName::ArrowUp).size(px(16.)).text_color(orange()))
+            .child(
+              v_flex()
+                .flex_1()
+                .gap(px(3.))
+                .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).child("Update available"))
+                .child(mono(format!("{installed} → {latest}")).text_size(px(12.)).text_color(theme.muted_foreground))
+                .when(id == "npm", |this| this.child(caption("npm is updated together with Node.js.", cx))),
+            )
+            .when(updatable, |this| {
+              this.child(
+                Button::new("update-now")
+                  .primary()
+                  .label("Update")
+                  .disabled(model.busy())
+                  .on_click(move |_, _, cx| update_model.update(cx, |model, cx| model.prepare(Some(BTreeSet::from([id.to_string()])), cx))),
+              )
+            }),
+        )
+      }
+      _ => None,
+    };
     let actions = if id == "npm" {
       h_flex()
         .gap_2()
@@ -162,6 +196,7 @@ impl Workspace {
             .child(div().text_size(px(13.)).text_color(theme.muted_foreground).child(tool.subtitle)),
         ),
       )
+      .children(update_callout)
       .child(fields)
       .children(locations)
       .child(actions)
@@ -173,7 +208,11 @@ impl Workspace {
       (Icon::new(IconName::Ellipsis), if self.model.read(cx).is_scanning { "Scanning" } else { "Pending" }, theme.muted_foreground)
     } else if let Some(installation) = tool.primary() {
       if installation.version.is_some() {
-        (Icon::new(IconName::CircleCheck), "Installed", green())
+        if self.model.read(cx).has_update(tool) {
+          (Icon::new(IconName::ArrowUp), "Update available", orange())
+        } else {
+          (Icon::new(IconName::CircleCheck), "Installed", green())
+        }
       } else {
         (Icon::new(IconName::CircleAlert), "Needs attention", orange())
       }
@@ -206,7 +245,10 @@ impl Workspace {
       } else {
         "Latest version for this tool's installation source and release channel."
       };
-      div().child(mono(version.clone()).id("latest-version").tooltip(move |window, cx| component::tooltip::Tooltip::new(tip).build(window, cx)))
+      let newer = model.has_update(tool);
+      div()
+        .text_color(if newer { orange() } else { theme.foreground })
+        .child(mono(version.clone()).id("latest-version").tooltip(move |window, cx| component::tooltip::Tooltip::new(tip).build(window, cx)))
     } else {
       div().text_color(theme.muted_foreground).child("—")
     }

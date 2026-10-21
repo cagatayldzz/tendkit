@@ -4,7 +4,7 @@ use gpui_kit::{
   *,
 };
 use gpui_kit_assets::IconName as Lucide;
-use tendkit_model::{AppModel, ToolRow};
+use tendkit_model::{AppModel, ToolRow, UpdateStatus};
 
 pub fn orange() -> Hsla {
   hsla(28. / 360., 0.92, 0.52, 1.)
@@ -80,4 +80,37 @@ pub fn caption(text: impl Into<SharedString>, cx: &App) -> Div {
 
 pub fn mono(text: impl Into<SharedString>) -> Div {
   div().font_family("Menlo").child(text.into())
+}
+
+/// One-line status for a tool: its install state and, for installed tools, whether
+/// a newer version is available. Returns the text and its color.
+pub fn status_summary(model: &AppModel, tool: &ToolRow, cx: &App) -> (String, Hsla) {
+  let muted = cx.theme().muted_foreground;
+  if !tool.scanned {
+    return ("Waiting for scan".into(), muted);
+  }
+  let Some(version) = tool.installed_version() else {
+    return if tool.installations.is_empty() { ("Not installed".into(), muted) } else { ("Needs attention".into(), orange()) };
+  };
+  match model.update_status(tool) {
+    // npm ships with Node.js, so it has no update action of its own.
+    Some(UpdateStatus::Available { installed, latest }) if tool.id == "npm" => (format!("Updates with Node.js · {installed} → {latest}"), orange()),
+    Some(UpdateStatus::Available { installed, latest }) => (format!("Update available · {installed} → {latest}"), orange()),
+    Some(UpdateStatus::UpToDate) => (format!("Up to date · {version}"), green()),
+    Some(UpdateStatus::Checking) => (format!("Installed · {version} · Checking for updates…"), muted),
+    _ => (format!("Installed · {version}"), green()),
+  }
+}
+
+/// A compact orange pill, e.g. the update count on a navigation card.
+pub fn pill(text: impl Into<SharedString>, color: Hsla) -> Div {
+  div()
+    .px(px(7.))
+    .py(px(2.))
+    .rounded_full()
+    .bg(color.opacity(0.14))
+    .text_color(color)
+    .text_size(px(10.))
+    .font_weight(FontWeight::SEMIBOLD)
+    .child(text.into())
 }

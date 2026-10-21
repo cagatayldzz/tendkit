@@ -1,4 +1,7 @@
-use super::{components::green, Destination, Workspace};
+use super::{
+  components::{green, orange},
+  Destination, Workspace,
+};
 use crate::platform;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -38,10 +41,12 @@ impl Workspace {
   fn navigation_card(&self, destination: Destination, cx: &mut Context<Self>) -> impl IntoElement {
     let theme = cx.theme().clone();
     let active = self.destination == destination;
-    let count = self.model.read(cx).tools.iter().filter(|t| destination.includes(t)).count();
+    let model = self.model.read(cx);
+    let count = model.tools.iter().filter(|t| destination.includes(t, model)).count();
     let (icon, tint): (Icon, Hsla) = match destination {
       Destination::AllTools => (Icon::new(Lucide::Boxes), theme.blue),
       Destination::Installed => (Icon::new(IconName::CircleCheck), green()),
+      Destination::Updates => (Icon::new(Lucide::CircleArrowDown), orange()),
       Destination::Settings => (Icon::new(IconName::Settings), theme.muted_foreground),
     };
     let foreground = if active { white() } else { theme.foreground };
@@ -73,7 +78,13 @@ impl Workspace {
               div()
                 .text_size(px(10.))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(if active { foreground } else { theme.muted_foreground })
+                .text_color(if active {
+                  foreground
+                } else if destination == Destination::Updates && count > 0 {
+                  orange()
+                } else {
+                  theme.muted_foreground
+                })
                 .child(count.to_string()),
             )
           }),

@@ -1,30 +1,33 @@
 use super::{
-  components::{green, orange, selection_checkbox, tool_icon, tool_tint},
+  components::{caption, green, orange, selection_checkbox, status_summary, tool_icon, tool_tint},
   Workspace,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
   component::{
     button::{Button, ButtonVariants},
-    h_flex, v_flex, ActiveTheme, Icon, IconName, Sizable,
+    h_flex, v_flex, ActiveTheme, Disableable, Icon, IconName, Sizable,
   },
   *,
 };
-use tendkit_model::{ToolCategory, ToolRow};
+use std::collections::BTreeSet;
+use tendkit_model::{AppModel, ToolCategory, ToolRow};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub(super) enum CatalogFilter {
   #[default]
   All,
   Installed,
+  Updates,
   NotInstalled,
 }
 
 impl CatalogFilter {
-  pub(super) fn includes(self, tool: &ToolRow) -> bool {
+  pub(super) fn includes(self, tool: &ToolRow, model: &AppModel) -> bool {
     match self {
       Self::All => true,
       Self::Installed => tool.installed_version().is_some(),
+      Self::Updates => model.has_update(tool),
       Self::NotInstalled => tool.scanned && tool.installations.is_empty(),
     }
   }
@@ -51,16 +54,25 @@ impl Workspace {
     let model = self.model.read(cx);
     let installed = model.installed_count();
     let total = model.tools.len();
+    let not_installed = model.tools.iter().filter(|t| t.scanned && t.installations.is_empty()).count();
+    let updates = model.update_count();
+    let updatable = model.updatable_ids().len();
+    let checking = model.is_checking_updates();
+    let busy = model.busy();
     let scanning = model.is_scanning;
+    let last_check = model.last_update_check.map(crate::platform::local_time);
     let show_progress = model.is_executing || model.run_status.is_some();
     let show_bar = !model.selected.is_empty() || model.is_planning;
     let error = model.error.clone();
     let tools = self.visible_tools(cx);
 
     let mut filters = h_flex().gap_2();
-    for (filter, label) in
-      [(CatalogFilter::All, "All tools"), (CatalogFilter::Installed, "Installed"), (CatalogFilter::NotInstalled, "Not installed")]
-    {
+    for (filter, label) in [
+      (CatalogFilter::All, "All tools"),
+      (CatalogFilter::Installed, "Installed"),
+      (CatalogFilter::Updates, "Updates"),
+      (CatalogFilter::NotInstalled, "Not installed"),
+    ] {
       let active = self.catalog_filter == filter;
       filters = filters.child(
         Button::new(SharedString::from(format!("catalog-filter-{label}")))
@@ -81,32 +93,54 @@ impl Workspace {
       .p(px(26.))
       .gap(px(24.))
       .child(
-        v_flex()
-          .gap_2()
+        h_flex()
+          .gap_3()
+          .child(self.stat_tile("Installed", format!("{installed}/{total}"), green(), CatalogFilter::Installed, cx))
+          .child(self.stat_tile(
+            "Updates",
+            updates.to_string(),
+            if updates > 0 { orange() } else { theme.muted_foreground },
+            CatalogFilter::Updates,
+            cx,
+          ))
+          .child(self.stat_tile("Not installed", not_installed.to_string(), theme.muted_foreground, CatalogFilter::NotInstalled, cx)),
+      )
+      .child(
+        h_flex()
+          .gap_3()
           .child(
             h_flex()
-              .gap_3()
-              .child(div().text_size(px(26.)).font_weight(FontWeight::SEMIBOLD).child("Build your workspace."))
-              .child(div().flex_1())
-              .child(
-                h_flex()
-                  .gap_2()
-                  .px_3()
-                  .py_2()
-                  .rounded(px(20.))
-                  .bg(green().opacity(0.08))
-                  .text_color(if scanning { theme.muted_foreground } else { green() })
-                  .text_size(px(11.))
-                  .child(Icon::new(if scanning { IconName::RefreshCw } else { IconName::CircleCheck }).size(px(13.)))
-                  .child(if scanning { "Scanning tools…".to_string() } else { format!("{installed} of {total} installed") }),
-              ),
-          )
-          .child(
-            div()
-              .text_size(px(13.))
+              .gap_2()
+              .text_size(px(12.))
               .text_color(theme.muted_foreground)
-              .child("Discover the runtimes, package managers, and AI tools for your next project."),
-          ),
+              .child(Icon::new(if scanning || checking { IconName::RefreshCw } else { IconName::CircleCheck }).size(px(13.)))
+              .child(if scanning {
+                "Scanning tools…".to_string()
+              } else if checking {
+                "Checking for updates…".to_string()
+              } else if let Some(time) = last_check {
+                format!("Updates checked at {time}")
+              } else {
+                "Updates not checked yet".to_string()
+              }),
+          )
+          .child(div().flex_1())
+          .child(
+            Button::new("check-updates").ghost().small().icon(IconName::RefreshCw).label("Check for Updates").disabled(busy || checking).on_click(
+              cx.listener(|this, _, _, cx| {
+                this.model.update(cx, |model, cx| model.check_all_latest(true, cx));
+              }),
+            ),
+          )
+          .when(updatable > 0, |this| {
+            this.child(
+              Button::new("update-all").primary().small().icon(IconName::ArrowUp).label(format!("Update All ({updatable})")).disabled(busy).on_click(
+                cx.listener(|this, _, _, cx| {
+                  this.model.update(cx, |model, cx| model.update_all(cx));
+                }),
+              ),
+            )
+          }),
       )
       .child(filters);
 
@@ -180,15 +214,10 @@ impl Workspace {
     let tint = tool_tint(tool.id, cx);
     let id = tool.id;
     let selected = self.model.read(cx).selected.contains(id);
-    let (status, color) = if !tool.scanned {
-      ("Waiting for scan".to_string(), theme.muted_foreground)
-    } else if let Some(version) = tool.installed_version() {
-      (format!("Installed · {version}"), green())
-    } else if !tool.installations.is_empty() {
-      ("Needs attention".to_string(), orange())
-    } else {
-      ("Not installed".to_string(), theme.muted_foreground)
-    };
+    let model = self.model.read(cx);
+    let (status, color) = status_summary(model, tool, cx);
+    let has_update = model.has_update(tool);
+    let can_update = has_update && model.can_manage(tool) && id != "npm" && !model.busy();
 
     v_flex()
       .id(SharedString::from(format!("catalog-{id}")))
@@ -199,7 +228,13 @@ impl Workspace {
       .p(px(17.))
       .rounded(px(14.))
       .border_1()
-      .border_color(if selected { theme.blue.opacity(0.65) } else { theme.border })
+      .border_color(if selected {
+        theme.blue.opacity(0.65)
+      } else if has_update {
+        orange().opacity(0.5)
+      } else {
+        theme.border
+      })
       .bg(if selected { theme.blue.opacity(0.06) } else { tint.opacity(0.025) })
       .hover(move |style| style.bg(tint.opacity(0.07)).border_color(tint.opacity(0.4)))
       .child(
@@ -223,8 +258,19 @@ impl Workspace {
           .border_t_1()
           .border_color(theme.border.opacity(0.6))
           .child(div().size(px(5.)).rounded_full().bg(color))
-          .child(div().text_size(px(11.)).text_color(color).child(status))
+          .child(div().min_w_0().truncate().text_size(px(11.)).text_color(color).child(status))
           .child(div().flex_1())
+          .when(can_update, |this| {
+            let update_model = self.model.clone();
+            this.child(
+              Button::new(SharedString::from(format!("update-{id}")))
+                .primary()
+                .xsmall()
+                .label("Update")
+                .accessibility_label(format!("Update {}", tool.name))
+                .on_click(move |_, _, cx| update_model.update(cx, |model, cx| model.prepare(Some(BTreeSet::from([id.to_string()])), cx))),
+            )
+          })
           .child(
             Button::new(SharedString::from(format!("details-{id}")))
               .ghost()
@@ -235,5 +281,29 @@ impl Workspace {
               .on_click(cx.listener(move |this, _, _, cx| this.focus_tool(id, cx))),
           ),
       )
+  }
+
+  /// A clickable summary figure that filters the catalog.
+  fn stat_tile(&self, label: &'static str, value: String, color: Hsla, filter: CatalogFilter, cx: &mut Context<Self>) -> impl IntoElement {
+    let theme = cx.theme().clone();
+    let active = self.catalog_filter == filter;
+    v_flex()
+      .id(SharedString::from(format!("stat-{label}")))
+      .flex_1()
+      .gap(px(4.))
+      .px_4()
+      .py_3()
+      .rounded(px(12.))
+      .cursor_pointer()
+      .border_1()
+      .border_color(if active { color.opacity(0.55) } else { theme.border })
+      .bg(if active { color.opacity(0.07) } else { theme.foreground.opacity(0.025) })
+      .hover(move |style| style.bg(color.opacity(0.08)))
+      .on_click(cx.listener(move |this, _, _, cx| {
+        this.catalog_filter = if this.catalog_filter == filter { CatalogFilter::All } else { filter };
+        cx.notify();
+      }))
+      .child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).text_color(color).child(value))
+      .child(caption(label, cx))
   }
 }
