@@ -1,8 +1,11 @@
 use super::*;
 
+/// A settings path in a directory no other test uses; tests run in parallel, and
+/// a clock alone can return the same value twice.
 fn temp_file() -> PathBuf {
-  let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-  std::env::temp_dir().join(format!("tendkit-settings-{}-{nanos}", std::process::id())).join("settings.json")
+  static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+  let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+  std::env::temp_dir().join(format!("tendkit-settings-{}-{n}", std::process::id())).join("settings.json")
 }
 
 #[test]
