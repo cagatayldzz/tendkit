@@ -40,7 +40,7 @@ try {
     if (stamped === manifest && !manifest.includes(`version = "${version}"`)) throw new Error("Could not stamp [workspace.package] in Cargo.toml.");
     writeFileSync("Cargo.toml", stamped);
     const lock = readFileSync("Cargo.lock", "utf8");
-    const lockPattern = /(name = "tendkit(?:-[a-z]+)*"\nversion = ")[^"]+(")/g;
+    const lockPattern = /(name = "tendkit(?:-[\w]+)*"\nversion = ")[^"]+(")/g;
     if (!lockPattern.test(lock)) throw new Error("Could not stamp the TendKit packages in Cargo.lock.");
     writeFileSync("Cargo.lock", lock.replace(lockPattern, (_, prefix, suffix) => `${prefix}${version}${suffix}`));
     const plist = readFileSync("apps/tendkit/macos/Info.plist", "utf8")

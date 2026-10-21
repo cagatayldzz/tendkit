@@ -23,7 +23,7 @@ test("release preparation selects the tagged range and stamps every package cons
     }
     writeFileSync(join(root, "package.json"), '{"version":"0.2.0","type":"module"}\n');
     writeFileSync(join(root, "Cargo.toml"), '[workspace.package]\nversion = "0.2.0"\nedition = "2021"\n');
-    writeFileSync(join(root, "Cargo.lock"), ["tendkit", "tendkit-protocol", "dependency", "tendkit-engine"]
+    writeFileSync(join(root, "Cargo.lock"), ["tendkit", "tendkit-protocol", "tendkit-i18n", "dependency", "tendkit-engine"]
       .map((name) => `[[package]]\nname = "${name}"\nversion = "${name === "dependency" ? "1.0.0" : "0.2.0"}"\n`).join("\n"));
     writeFileSync(join(root, "apps/tendkit/macos/Info.plist"), '<key>CFBundleShortVersionString</key><string>0.2.0</string>\n<key>CFBundleVersion</key><string>2</string>\n');
     git("init", "--initial-branch=main");
@@ -48,7 +48,7 @@ test("release preparation selects the tagged range and stamps every package cons
       expect(readFileSync(join(root, file), "utf8")).toContain("0.2.10");
     }
     const lock = readFileSync(join(root, "Cargo.lock"), "utf8");
-    for (const name of ["tendkit", "tendkit-protocol", "tendkit-engine"]) {
+    for (const name of ["tendkit", "tendkit-protocol", "tendkit-i18n", "tendkit-engine"]) {
       expect(lock).toContain(`name = "${name}"\nversion = "0.2.10"`);
     }
     expect(lock).toContain('name = "dependency"\nversion = "1.0.0"');
