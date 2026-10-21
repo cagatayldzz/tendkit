@@ -14,6 +14,9 @@ dependencies = ["tendkit-detect", "tendkit-process", "tendkit-protocol", "serde_
 [lints]
 workspace = true
 
+[lib]
+doctest = false
+
 [dependencies]
 tendkit-detect.workspace = true
 tendkit-process.workspace = true

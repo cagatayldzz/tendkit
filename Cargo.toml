@@ -54,3 +54,21 @@ opt-level = 2
 
 [profile.dev.package.taffy]
 opt-level = 2
+
+# Tests never render, so they skip the optimization the development app needs for
+# smooth layout. Dependencies and workspace crates build without debug info.
+[profile.test]
+debug = 0
+incremental = false
+
+[profile.test.package."*"]
+opt-level = 0
+
+[profile.test.package.gpui-pre]
+opt-level = 0
+
+[profile.test.package.gpui-component]
+opt-level = 0
+
+[profile.test.package.taffy]
+opt-level = 0

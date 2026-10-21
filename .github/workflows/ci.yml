@@ -14,30 +14,51 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  test:
-    # TendKit targets Apple Silicon only, so test on the same architecture.
-    runs-on: macos-26
-    timeout-minutes: 20
+  # Cheap checks need no macOS runner and finish while the macOS jobs build.
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.3
       - run: rustup default stable
+      - name: Test release automation
+        run: bun test scripts
+      - name: Check workspace layers
+        run: bun scripts/layers.ts
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  # Clippy and the tests compile separately (check vs. build artifacts), so they
+  # run side by side instead of one after the other.
+  clippy:
+    # TendKit targets Apple Silicon only, so build on the same architecture.
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup default stable
       # Caches dependencies only, keyed by toolchain and Cargo.lock, so a push
       # that changes TendKit sources restores the cache without re-saving it.
       # Pull requests read the cache that main builds.
       - uses: Swatinem/rust-cache@v2
         with:
+          shared-key: clippy
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Lint
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+  test:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - run: rustup default stable
+      - uses: Swatinem/rust-cache@v2
+        with:
           shared-key: test
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Test release automation
-        run: bun test scripts
-      - name: Check workspace layers
-        run: bun scripts/layers.ts
-      - name: Check formatting and lints
-        run: |
-          cargo fmt --all -- --check
-          cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test the Rust workspace
         run: bash scripts/test.sh
