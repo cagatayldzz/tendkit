@@ -1,0 +1,52 @@
+[workspace]
+resolver = "2"
+members = ["apps/*", "crates/*"]
+default-members = ["apps/tendkit"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "UNLICENSED"
+
+[workspace.dependencies]
+tendkit-protocol = { path = "crates/protocol" }
+tendkit-storage = { path = "crates/storage" }
+tendkit-client = { path = "crates/client" }
+tendkit-process = { path = "crates/process" }
+tendkit-detect = { path = "crates/detect" }
+tendkit-plan = { path = "crates/plan" }
+tendkit-shellrc = { path = "crates/shellrc" }
+tendkit-execute = { path = "crates/execute" }
+tendkit-model = { path = "crates/model" }
+tendkit-ui = { path = "crates/ui" }
+futures = "0.3"
+gpui-kit = "0.8.0"
+gpui-kit-assets = "0.8.0"
+libc = "0.2.190"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "deny"
+unimplemented = "deny"
+
+# Dependencies (GPUI above all) build without debug info: the target directory
+# and CI cache shrink by gigabytes and linking gets faster. TendKit's own
+# crates keep full debug info.
+[profile.dev.package."*"]
+debug = false
+
+# Keep layout and frame rendering fast in the development app as well.
+[profile.dev.package.gpui-pre]
+opt-level = 2
+
+[profile.dev.package.gpui-component]
+opt-level = 2
+
+[profile.dev.package.taffy]
+opt-level = 2

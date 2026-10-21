@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Tests run alongside the build; nothing is published unless both pass.
+  test:
+    if: github.ref_name == github.event.repository.default_branch
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      sha: ${{ steps.version.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+      - run: rustup default stable
+      # Restored before the version is stamped into the manifests, so the key
+      # depends only on the toolchain and Cargo.lock.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+      - name: Validate release requirements
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          for variable in OPENAI_API_KEY APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD; do
+            test -n "${!variable}" || { echo "Add the $variable Actions secret." >&2; exit 1; }
+          done
+          test "$(uname -m)" = arm64 || { echo "Release requires an Apple Silicon runner." >&2; exit 1; }
+      - name: Prepare version
+        id: version
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: bun scripts/release-ci.js prepare
+      - name: Check for an existing release
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "This release already exists. Inspect or remove its draft before retrying." >&2
+            exit 1
+          fi
+      - name: Build release application
+        run: bun run build
+      - name: Sign and notarize application
+        env:
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: bash scripts/notarize-app.sh
+      - name: Generate release notes
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: bun scripts/release-ci.js notes
+      - name: Package application
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          archive="TendKit-${RELEASE_TAG}-macos-arm64.zip"
+          ditto -c -k --sequesterRsrc --keepParent dist/TendKit.app "dist/$archive"
+          cd dist
+          shasum -a 256 "$archive" > SHA256SUMS.txt
+      - name: Preserve release artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: release
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+            dist/RELEASE_NOTES.md
+
+  # Publishing needs no macOS tools, so it uses a Linux runner instead of
+  # waiting for another macOS one.
+  publish:
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.build.outputs.tag }}
+      RELEASE_SHA: ${{ needs.build.outputs.sha }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: dist
+      - name: Publish GitHub release
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "dist/TendKit-${RELEASE_TAG}-macos-arm64.zip" dist/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$RELEASE_SHA" --title "TendKit ${RELEASE_TAG#v}" \
+            --notes-file dist/RELEASE_NOTES.md --draft
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

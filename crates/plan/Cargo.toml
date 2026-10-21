@@ -1,0 +1,20 @@
+[package]
+name = "tendkit-plan"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "TendKit installation planning and release resolution"
+
+[package.metadata.layers]
+# Layer check (`bun run check:layers`): the dependencies this package may use.
+dependencies = ["tendkit-detect", "tendkit-process", "tendkit-protocol", "serde_json"]
+
+[lints]
+workspace = true
+
+[dependencies]
+tendkit-detect.workspace = true
+tendkit-process.workspace = true
+tendkit-protocol.workspace = true
+serde_json.workspace = true

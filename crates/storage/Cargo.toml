@@ -1,0 +1,18 @@
+[package]
+name = "tendkit-storage"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "TendKit per-user files: paths, caches, window size, and OpenCommit configuration"
+
+[package.metadata.layers]
+# Layer check (`bun run check:layers`): the dependencies this package may use.
+dependencies = ["serde", "serde_json", "libc"]
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

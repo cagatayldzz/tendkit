@@ -1,0 +1,5 @@
+# `block` 0.1.6 (pulled in by GPUI's macOS backend through cocoa and metal)
+# triggers a future-incompatibility notice on every build. It is not TendKit
+# code and has no newer release in GPUI's dependency tree yet.
+[future-incompat-report]
+frequency = "never"

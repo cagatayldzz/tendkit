@@ -1,0 +1,25 @@
+[package]
+name = "tendkit"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "TendKit macOS application"
+default-run = "TendKit"
+
+[package.metadata.layers]
+# Layer check (`bun run check:layers`): the dependencies this package may use.
+dependencies = ["tendkit-ui", "tendkit-model", "tendkit-storage", "gpui-kit"]
+
+[lints]
+workspace = true
+
+[dependencies]
+tendkit-ui.workspace = true
+tendkit-model.workspace = true
+tendkit-storage.workspace = true
+gpui-kit.workspace = true
+
+[[bin]]
+name = "TendKit"
+path = "src/main.rs"

@@ -1,0 +1,22 @@
+[package]
+name = "tendkit-engine"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "TendKit installation engine executable"
+
+[package.metadata.layers]
+# Layer check (`bun run check:layers`): the dependencies this package may use.
+dependencies = ["tendkit-protocol", "tendkit-process", "tendkit-detect", "tendkit-plan", "tendkit-execute", "serde_json"]
+
+[lints]
+workspace = true
+
+[dependencies]
+tendkit-protocol.workspace = true
+tendkit-process.workspace = true
+tendkit-detect.workspace = true
+tendkit-plan.workspace = true
+tendkit-execute.workspace = true
+serde_json.workspace = true

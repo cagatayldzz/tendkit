@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    # TendKit targets Apple Silicon only, so test on the same architecture.
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: rustup default stable
+      # Caches dependencies only, keyed by toolchain and Cargo.lock, so a push
+      # that changes TendKit sources restores the cache without re-saving it.
+      # Pull requests read the cache that main builds.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: test
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Test release automation
+        run: bun test scripts
+      - name: Check workspace layers
+        run: bun scripts/layers.ts
+      - name: Check formatting and lints
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test the Rust workspace
+        run: bash scripts/test.sh

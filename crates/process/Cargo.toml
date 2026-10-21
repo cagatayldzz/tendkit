@@ -1,0 +1,19 @@
+[package]
+name = "tendkit-process"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "TendKit engine process supervision, downloads, and search paths"
+
+[package.metadata.layers]
+# Layer check (`bun run check:layers`): the dependencies this package may use.
+dependencies = ["tendkit-protocol", "serde_json", "libc"]
+
+[lints]
+workspace = true
+
+[dependencies]
+tendkit-protocol.workspace = true
+serde_json.workspace = true
+libc.workspace = true

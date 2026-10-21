@@ -1,0 +1,21 @@
+[package]
+name = "tendkit-model"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "TendKit application state shared by the interface"
+
+[package.metadata.layers]
+# Layer check (`bun run check:layers`): the dependencies this package may use.
+dependencies = ["tendkit-client", "tendkit-protocol", "tendkit-storage", "futures", "gpui-kit"]
+
+[lints]
+workspace = true
+
+[dependencies]
+tendkit-client.workspace = true
+tendkit-protocol.workspace = true
+tendkit-storage.workspace = true
+futures.workspace = true
+gpui-kit.workspace = true
