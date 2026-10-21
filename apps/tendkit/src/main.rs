@@ -1,6 +1,7 @@
 //! The TendKit application: window, menus, and application-level actions.
 
 use gpui_kit::{component::TitleBar, *};
+use tendkit_i18n::t;
 use tendkit_model::AppModel;
 use tendkit_storage::WindowSize;
 use tendkit_ui::{Assets, Hide, HideOthers, Minimize, Quit, ScanAgain, ShowAll, Workspace, Zoom, TOOLBAR_HEIGHT};
@@ -21,6 +22,15 @@ fn main() {
 
     let model = cx.new(|_| AppModel::new());
     cx.set_global(AppState { model: model.clone(), window: None });
+    // The menu bar is not part of the view tree, so rebuild it when the language changes.
+    let mut menu_language = tendkit_i18n::language();
+    cx.observe(&model, move |_, cx| {
+      if tendkit_i18n::language() != menu_language {
+        menu_language = tendkit_i18n::language();
+        set_menus(cx);
+      }
+    })
+    .detach();
     cx.on_action(|_: &Quit, cx| request_quit(cx));
     cx.on_action(|_: &Hide, cx| cx.hide());
     cx.on_action(|_: &HideOthers, cx| cx.hide_other_apps());
@@ -101,25 +111,30 @@ fn bind_keys(cx: &mut App) {
       let _ = window.update(cx, |_, window, _| window.zoom_window());
     }
   });
+  set_menus(cx);
+}
+
+/// Builds the menu bar in the active language; called again when the language changes.
+fn set_menus(cx: &mut App) {
   cx.set_menus([
     Menu::new("TendKit").items([
-      MenuItem::action("Hide TendKit", Hide),
-      MenuItem::action("Hide Others", HideOthers),
-      MenuItem::action("Show All", ShowAll),
+      MenuItem::action(t("menu.hide"), Hide),
+      MenuItem::action(t("menu.hide_others"), HideOthers),
+      MenuItem::action(t("menu.show_all"), ShowAll),
       MenuItem::separator(),
-      MenuItem::action("Quit TendKit", Quit),
+      MenuItem::action(t("menu.quit"), Quit),
     ]),
-    Menu::new("Edit").items([
-      MenuItem::os_action("Undo", gpui_kit::component::input::Undo, OsAction::Undo),
-      MenuItem::os_action("Redo", gpui_kit::component::input::Redo, OsAction::Redo),
+    Menu::new(t("menu.edit")).items([
+      MenuItem::os_action(t("menu.undo"), gpui_kit::component::input::Undo, OsAction::Undo),
+      MenuItem::os_action(t("menu.redo"), gpui_kit::component::input::Redo, OsAction::Redo),
       MenuItem::separator(),
-      MenuItem::os_action("Cut", gpui_kit::component::input::Cut, OsAction::Cut),
-      MenuItem::os_action("Copy", gpui_kit::component::input::Copy, OsAction::Copy),
-      MenuItem::os_action("Paste", gpui_kit::component::input::Paste, OsAction::Paste),
-      MenuItem::os_action("Select All", gpui_kit::component::input::SelectAll, OsAction::SelectAll),
+      MenuItem::os_action(t("menu.cut"), gpui_kit::component::input::Cut, OsAction::Cut),
+      MenuItem::os_action(t("menu.copy"), gpui_kit::component::input::Copy, OsAction::Copy),
+      MenuItem::os_action(t("menu.paste"), gpui_kit::component::input::Paste, OsAction::Paste),
+      MenuItem::os_action(t("menu.select_all"), gpui_kit::component::input::SelectAll, OsAction::SelectAll),
     ]),
-    Menu::new("View").items([MenuItem::action("Scan Again", ScanAgain)]),
-    Menu::new("Window").items([MenuItem::action("Minimize", Minimize), MenuItem::action("Zoom", Zoom)]),
+    Menu::new(t("menu.view")).items([MenuItem::action(t("menu.scan_again"), ScanAgain)]),
+    Menu::new(t("menu.window")).items([MenuItem::action(t("menu.minimize"), Minimize), MenuItem::action(t("menu.zoom"), Zoom)]),
   ]);
 }
 
@@ -146,13 +161,9 @@ fn confirm_close(window: &mut Window, cx: &mut App) -> bool {
   if !model.read(cx).is_executing {
     return true;
   }
-  let answer = window.prompt(
-    PromptLevel::Warning,
-    "An installation is in progress",
-    Some("Quitting cancels the operation. Completed installations are preserved. Close any open macOS Installer window separately."),
-    &["Continue Operation", "Cancel and Quit"],
-    cx,
-  );
+  let (title, detail) = (t("quit.title"), t("quit.detail"));
+  let (continue_label, cancel_label) = (t("quit.continue"), t("quit.cancel"));
+  let answer = window.prompt(PromptLevel::Warning, &title, Some(&detail), &[continue_label.as_str(), cancel_label.as_str()], cx);
   cx.spawn(async move |cx| {
     if answer.await == Ok(1) {
       model.update(cx, |model, cx| {

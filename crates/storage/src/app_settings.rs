@@ -6,18 +6,20 @@ use std::{
 };
 
 /// Preferences that persist across launches.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppSettings {
   /// Look for a new TendKit release when the app starts.
   pub check_app_updates: bool,
   /// Add managed tools to the terminal PATH when a plan is approved.
   pub configure_shell: bool,
+  /// The interface language code; `None` follows the language of the computer.
+  pub language: Option<String>,
 }
 
 impl Default for AppSettings {
   fn default() -> Self {
-    Self { check_app_updates: true, configure_shell: true }
+    Self { check_app_updates: true, configure_shell: true, language: None }
   }
 }
 

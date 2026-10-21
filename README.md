@@ -54,6 +54,7 @@ The Cargo workspace separates executables (`apps/`) from libraries (`crates/`):
 | `crates/storage` | per-user files: caches, window size, app settings, OpenCommit config |
 | `crates/updater` | TendKit self-update from GitHub releases |
 | `crates/version` | version comparison |
+| `crates/i18n` | interface languages (English, Türkçe) and system language detection |
 | `crates/model` | application state (`AppModel`) |
 | `crates/ui` | views built with [GPUI Kit](https://gpui-kit.com) |
 | `crates/process` | supervised commands, downloads, search paths |
@@ -71,6 +72,13 @@ Tests never install or modify real tools. To query the engine directly:
 printf '%s\n' '{"protocol_version":1,"request_id":"manual","command":"scan"}' \
   | target/debug/tendkit-engine
 ```
+
+## Language
+
+On first launch TendKit uses the first language in your macOS language list that
+it supports (currently English and Türkçe), and English when none is supported.
+Change it in Settings → General → Interface language; "System default" follows
+the computer again.
 
 ## Updating TendKit
 

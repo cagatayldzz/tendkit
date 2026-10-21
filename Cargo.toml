@@ -20,6 +20,7 @@ tendkit-plan = { path = "crates/plan" }
 tendkit-shellrc = { path = "crates/shellrc" }
 tendkit-execute = { path = "crates/execute" }
 tendkit-version = { path = "crates/version" }
+tendkit-i18n = { path = "crates/i18n" }
 tendkit-updater = { path = "crates/updater" }
 tendkit-model = { path = "crates/model" }
 tendkit-ui = { path = "crates/ui" }

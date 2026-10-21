@@ -9,12 +9,13 @@ description = "TendKit application state shared by the interface"
 
 [package.metadata.layers]
 # Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["tendkit-client", "tendkit-protocol", "tendkit-storage", "tendkit-updater", "tendkit-version", "futures", "gpui-kit"]
+dependencies = ["tendkit-i18n", "tendkit-client", "tendkit-protocol", "tendkit-storage", "tendkit-updater", "tendkit-version", "futures", "gpui-kit"]
 
 [lints]
 workspace = true
 
 [dependencies]
+tendkit-i18n.workspace = true
 tendkit-client.workspace = true
 tendkit-protocol.workspace = true
 tendkit-storage.workspace = true

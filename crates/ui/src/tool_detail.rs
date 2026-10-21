@@ -15,6 +15,7 @@ use gpui_kit::{
 };
 use gpui_kit_assets::IconName as Lucide;
 use std::collections::BTreeSet;
+use tendkit_i18n::{t, tf};
 use tendkit_model::{ToolRow, UpdateStatus};
 
 impl Workspace {
@@ -39,15 +40,8 @@ impl Workspace {
           .items_center()
           .gap(px(14.))
           .child(Icon::new(Lucide::Boxes).size(px(44.)).text_color(theme.muted_foreground.opacity(0.6)))
-          .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).text_color(theme.muted_foreground).child("Your Developer Environment"))
-          .child(
-            div()
-              .max_w(px(300.))
-              .text_center()
-              .text_size(px(13.))
-              .text_color(theme.muted_foreground)
-              .child("Select a tool to see its version, installation details, and available actions."),
-          ),
+          .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).text_color(theme.muted_foreground).child(t("detail.empty_title")))
+          .child(div().max_w(px(300.)).text_center().text_size(px(13.)).text_color(theme.muted_foreground).child(t("detail.empty_hint"))),
       ),
     };
     if show_progress {
@@ -74,17 +68,17 @@ impl Workspace {
     let model = self.model.read(cx);
     let divider = || div().ml_4().h(px(1.)).bg(theme.border);
     let mut fields = card(cx)
-      .child(detail_field("Status", self.status(tool, cx), cx))
+      .child(detail_field(t("detail.status"), self.status(tool, cx), cx))
       .child(divider())
-      .child(detail_field("Current Version", mono(tool.installed_version().unwrap_or("—").to_string()), cx))
+      .child(detail_field(t("detail.current"), mono(tool.installed_version().unwrap_or("—").to_string()), cx))
       .child(divider())
-      .child(detail_field("Latest Version", latest, cx));
+      .child(detail_field(t("detail.latest"), latest, cx));
     if let Some(installed) = tool.primary() {
-      fields = fields.child(divider()).child(detail_field("Source", div().child(installed.source.clone()), cx));
+      fields = fields.child(divider()).child(detail_field(t("detail.source"), div().child(installed.source.clone()), cx));
     }
 
     let locations = (!tool.installations.is_empty()).then(|| {
-      v_flex().gap_3().child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).child("Installation Locations")).children(
+      v_flex().gap_3().child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).child(t("detail.locations"))).children(
         tool.installations.iter().map(|installed| {
           card(cx).w_full().p(px(14.)).child(
             v_flex()
@@ -122,15 +116,15 @@ impl Workspace {
               v_flex()
                 .flex_1()
                 .gap(px(3.))
-                .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).child("Update available"))
+                .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).child(t("detail.update_available")))
                 .child(mono(format!("{installed} → {latest}")).text_size(px(12.)).text_color(theme.muted_foreground))
-                .when(id == "npm", |this| this.child(caption("npm is updated together with Node.js.", cx))),
+                .when(id == "npm", |this| this.child(caption(t("detail.npm_note"), cx))),
             )
             .when(updatable, |this| {
               this.child(
                 Button::new("update-now")
                   .primary()
-                  .label("Update")
+                  .label(t("action.update"))
                   .disabled(model.busy())
                   .on_click(move |_, _, cx| update_model.update(cx, |model, cx| model.prepare(Some(BTreeSet::from([id.to_string()])), cx))),
               )
@@ -145,13 +139,13 @@ impl Workspace {
         .text_size(px(13.))
         .text_color(theme.muted_foreground)
         .child(Icon::new(Lucide::Link).size(px(13.)))
-        .child("Managed with Node.js")
+        .child(t("detail.managed_with_node"))
         .into_any_element()
     } else {
       let label = match (id, tool.primary().is_some()) {
-        ("homebrew", true) => "Refresh",
-        (_, false) => "Install",
-        _ => "Update",
+        ("homebrew", true) => t("action.refresh"),
+        (_, false) => t("action.install"),
+        _ => t("action.update"),
       };
       let prepare_model = self.model.clone();
       h_flex()
@@ -161,9 +155,9 @@ impl Workspace {
         .when(id == "opencommit" && tool.primary().is_some(), |this| {
           this.child(
             Button::new("opencommit-settings")
-              .label("Settings")
+              .label(t("nav.settings"))
               .icon(Icon::new(Lucide::SlidersHorizontal))
-              .tooltip("Configure OpenCommit's model, language, and commit message style")
+              .tooltip(t("detail.opencommit_tooltip"))
               .disabled(model.is_executing)
               .on_click(cx.listener(|this, _, window, cx| this.open_opencommit_settings(window, cx))),
           )
@@ -184,7 +178,7 @@ impl Workspace {
           v_flex()
             .gap(px(5.))
             .child(div().text_size(px(25.)).font_weight(FontWeight::SEMIBOLD).child(tool.name))
-            .child(div().text_size(px(13.)).text_color(theme.muted_foreground).child(tool.subtitle)),
+            .child(div().text_size(px(13.)).text_color(theme.muted_foreground).child(tool.subtitle())),
         ),
       )
       .children(update_callout)
@@ -202,28 +196,24 @@ impl Workspace {
     let model = self.model.read(cx);
     let id = tool.id;
     if model.checking_latest.contains(id) {
-      h_flex().gap_2().child(Spinner::new().xsmall()).child(div().text_color(theme.muted_foreground).child("Checking…"))
+      h_flex().gap_2().child(Spinner::new().xsmall()).child(div().text_color(theme.muted_foreground).child(t("status.checking")))
     } else if let Some(error) = model.latest_version_errors.get(id) {
       let retry_model = self.model.clone();
-      h_flex().gap_2().child(div().text_color(theme.muted_foreground).child("Unavailable")).child(
+      h_flex().gap_2().child(div().text_color(theme.muted_foreground).child(t("detail.unavailable"))).child(
         Button::new("retry-latest")
           .ghost()
           .xsmall()
           .icon(IconName::RefreshCw)
-          .accessibility_label("Retry checking the latest version")
-          .tooltip(format!("Retry checking the latest version. {error}"))
+          .accessibility_label(t("detail.retry"))
+          .tooltip(tf("detail.retry_tooltip", &[("error", error)]))
           .on_click(move |_, _, cx| retry_model.update(cx, |model, cx| model.check_latest_version(id, true, cx))),
       )
     } else if let Some(version) = model.latest_versions.get(id) {
-      let tip = if id == "npm" {
-        "Latest npm release. npm is installed and updated with Node.js."
-      } else {
-        "Latest version for this tool's installation source and release channel."
-      };
+      let tip = if id == "npm" { t("detail.latest_npm_tip") } else { t("detail.latest_tip") };
       let newer = model.has_update(tool);
       div()
         .text_color(if newer { orange() } else { theme.foreground })
-        .child(mono(version.clone()).id("latest-version").tooltip(move |window, cx| component::tooltip::Tooltip::new(tip).build(window, cx)))
+        .child(mono(version.clone()).id("latest-version").tooltip(move |window, cx| component::tooltip::Tooltip::new(tip.clone()).build(window, cx)))
     } else {
       div().text_color(theme.muted_foreground).child("—")
     }
@@ -243,24 +233,24 @@ impl Workspace {
           .gap_2()
           .when(model.is_planning, |this| this.child(Spinner::new().small()))
           .child(div().text_size(px(13.)).font_weight(FontWeight::MEDIUM).child(if model.is_planning {
-            "Preparing plan…".to_string()
+            t("activity.planning")
           } else {
-            format!("{} tools selected", model.selected.len())
+            tf("bar.selected", &[("count", &model.selected.len().to_string())])
           }))
           .child(div().flex_1())
           .child(
             Button::new("review-plan")
               .primary()
-              .label("Review Plan")
+              .label(t("bar.review"))
               .icon(IconName::ArrowRight)
               .disabled(model.busy() || model.selected.is_empty())
               .on_click(move |_, _, cx| prepare_model.update(cx, |model, cx| model.prepare(None, cx))),
           ),
       )
-      .child(caption("Changes begin only after you approve the plan.", cx).text_color(theme.muted_foreground.opacity(0.7)))
+      .child(caption(t("bar.note"), cx).text_color(theme.muted_foreground.opacity(0.7)))
   }
 }
 
-fn detail_field(title: &'static str, content: impl IntoElement, cx: &App) -> impl IntoElement {
+fn detail_field(title: String, content: impl IntoElement, cx: &App) -> impl IntoElement {
   h_flex().gap_4().p_4().text_size(px(13.)).child(div().text_color(cx.theme().muted_foreground).child(title)).child(div().flex_1()).child(content)
 }

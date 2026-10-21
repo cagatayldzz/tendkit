@@ -5,7 +5,9 @@ use gpui_kit::{
   *,
 };
 use gpui_kit_assets::IconName as Lucide;
+use tendkit_i18n::{t, tf};
 use tendkit_model::{AppModel, ToolRow, UpdateStatus};
+use tendkit_protocol::{StepAction, StepStatus};
 
 pub fn orange() -> Hsla {
   hsla(28. / 360., 0.92, 0.52, 1.)
@@ -64,9 +66,9 @@ pub fn selection_checkbox(model: &Entity<AppModel>, tool: &ToolRow, label: bool,
     .checked(state.selected.contains(id))
     .disabled(state.busy() || !state.can_manage(tool))
     .small()
-    .when(label, |this| this.label("Include in installation"))
-    .accessibility_label(format!("Select {} for installation", tool.name))
-    .tooltip(if id == "npm" { "npm is managed with Node.js".to_string() } else { format!("Include {} in the installation plan", tool.name) })
+    .when(label, |this| this.label(t("select.label")))
+    .accessibility_label(tf("select.accessibility", &[("name", tool.name)]))
+    .tooltip(if id == "npm" { t("select.npm_tooltip") } else { tf("select.tooltip", &[("name", tool.name)]) })
     .on_click(move |checked, _, cx| checkbox_model.update(cx, |model, cx| model.toggle_selected(id, *checked, cx)))
 }
 
@@ -83,22 +85,45 @@ pub fn mono(text: impl Into<SharedString>) -> Div {
   div().font_family("Menlo").child(text.into())
 }
 
+/// A step outcome in the active language.
+pub fn step_status_label(status: StepStatus) -> String {
+  t(match status {
+    StepStatus::Succeeded => "step_status.succeeded",
+    StepStatus::Skipped => "step_status.skipped",
+    StepStatus::Blocked => "step_status.blocked",
+    StepStatus::Cancelled => "step_status.cancelled",
+    StepStatus::Failed => "step_status.failed",
+  })
+}
+
+/// What a plan step will do, in the active language.
+pub fn step_action_label(action: StepAction) -> String {
+  t(match action {
+    StepAction::Skip => "step_action.skip",
+    StepAction::Refresh => "step_action.refresh",
+    StepAction::Update => "action.update",
+    StepAction::Install => "action.install",
+  })
+}
+
 /// A status tag for a tool: installed state, or update availability for installed tools.
 pub fn status_tag(model: &AppModel, tool: &ToolRow) -> Tag {
   if !tool.scanned {
-    return Tag::secondary().small().child("Waiting for scan");
+    return Tag::secondary().small().child(t("status.waiting"));
   }
   if tool.installed_version().is_none() {
     return if tool.installations.is_empty() {
-      Tag::secondary().small().child("Not installed")
+      Tag::secondary().small().child(t("status.not_installed"))
     } else {
-      Tag::danger().small().child("Needs attention")
+      Tag::danger().small().child(t("status.needs_attention"))
     };
   }
   match model.update_status(tool) {
+    // npm ships with Node.js, so its newer release is informational.
+    Some(UpdateStatus::Available { latest, .. }) if tool.id == "npm" => Tag::info().small().child(tf("status.with_node", &[("version", &latest)])),
     Some(UpdateStatus::Available { installed, latest }) => Tag::warning().small().child(format!("{installed} → {latest}")),
-    Some(UpdateStatus::UpToDate) => Tag::success().small().child("Up to date"),
-    Some(UpdateStatus::Checking) => Tag::secondary().small().child("Checking…"),
-    _ => Tag::info().small().child("Installed"),
+    Some(UpdateStatus::UpToDate) => Tag::success().small().child(t("status.up_to_date")),
+    Some(UpdateStatus::Checking) => Tag::secondary().small().child(t("status.checking")),
+    _ => Tag::info().small().child(t("status.installed")),
   }
 }

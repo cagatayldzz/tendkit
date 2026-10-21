@@ -11,6 +11,11 @@ pub fn channel() -> &'static str {
   }
 }
 
+/// The release channel name in the active language.
+pub fn channel_label() -> String {
+  tendkit_i18n::t(if cfg!(debug_assertions) { "channel.developer" } else { "channel.stable" })
+}
+
 pub fn architecture() -> &'static str {
   match (std::env::consts::OS, std::env::consts::ARCH) {
     ("macos", "aarch64") => "Apple Silicon",

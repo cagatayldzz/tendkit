@@ -5,6 +5,7 @@ use crate::AppModel;
 use futures::{channel::mpsc, StreamExt};
 use gpui_kit::*;
 use std::time::SystemTime;
+use tendkit_i18n::{system_language, Language};
 use tendkit_updater::{Release, Stage};
 
 /// The version of the running application.
@@ -97,7 +98,7 @@ impl AppModel {
   /// Quits and lets the installer swap in the verified update.
   pub fn restart_to_update(&mut self, cx: &mut Context<Self>) {
     if self.is_executing {
-      self.app_update = AppUpdate::Failed("Finish or cancel the running installation before restarting.".into());
+      self.app_update = AppUpdate::Failed(tendkit_i18n::t("err.restart_busy"));
       cx.notify();
       return;
     }
@@ -115,6 +116,19 @@ impl AppModel {
 
   pub fn set_check_app_updates(&mut self, value: bool, cx: &mut Context<Self>) {
     self.settings.check_app_updates = value;
+    self.save_settings();
+    cx.notify();
+  }
+
+  /// The saved language choice; `None` means the language of the computer.
+  pub fn language_choice(&self) -> Option<Language> {
+    self.settings.language.as_deref().and_then(Language::from_code)
+  }
+
+  /// Switches the interface language and remembers the choice.
+  pub fn set_language(&mut self, choice: Option<Language>, cx: &mut Context<Self>) {
+    self.settings.language = choice.map(|language| language.code().to_string());
+    crate::apply_language(choice.unwrap_or_else(system_language));
     self.save_settings();
     cx.notify();
   }

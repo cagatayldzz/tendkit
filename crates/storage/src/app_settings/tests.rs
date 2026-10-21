@@ -18,10 +18,10 @@ fn defaults_apply_to_missing_and_invalid_files() {
 #[test]
 fn saved_values_round_trip_and_new_fields_default() {
   let path = temp_file();
-  let settings = AppSettings { check_app_updates: false, configure_shell: false };
+  let settings = AppSettings { check_app_updates: false, configure_shell: false, language: Some("tr".into()) };
   settings.save(&path).unwrap();
   assert_eq!(AppSettings::load(&path), settings);
   fs::write(&path, r#"{"check_app_updates":false}"#).unwrap();
-  assert_eq!(AppSettings::load(&path), AppSettings { check_app_updates: false, configure_shell: true });
+  assert_eq!(AppSettings::load(&path), AppSettings { check_app_updates: false, configure_shell: true, language: None });
   fs::remove_dir_all(path.parent().unwrap()).unwrap();
 }

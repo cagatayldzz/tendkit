@@ -1,5 +1,5 @@
 use super::{
-  components::{caption, green, mono, orange},
+  components::{caption, green, mono, orange, step_status_label},
   Workspace,
 };
 use gpui_kit::prelude::FluentBuilder as _;
@@ -14,6 +14,7 @@ use gpui_kit::{
   *,
 };
 use gpui_kit_assets::IconName as Lucide;
+use tendkit_i18n::t;
 use tendkit_protocol::{RunStatus, StepStatus};
 
 fn status_color(status: StepStatus) -> Hsla {
@@ -29,15 +30,15 @@ impl Workspace {
     let theme = cx.theme().clone();
     let model = self.model.read(cx);
     let title = if model.is_cancelling {
-      "Stopping the operation"
+      t("progress.title_stopping")
     } else if model.is_executing {
-      "Installation and updates"
+      t("progress.title_running")
     } else {
-      match model.run_status {
-        Some(RunStatus::Succeeded) => "Operation completed",
-        Some(RunStatus::Cancelled) => "Operation cancelled",
-        _ => "Some steps could not be completed",
-      }
+      t(match model.run_status {
+        Some(RunStatus::Succeeded) => "progress.title_done",
+        Some(RunStatus::Cancelled) => "progress.title_cancelled",
+        _ => "progress.title_failed",
+      })
     };
     let header_icon = if model.is_executing {
       Icon::new(Lucide::Package)
@@ -48,11 +49,11 @@ impl Workspace {
     };
     let pending = |id: &str| {
       if model.active_step.as_deref() == Some(id) {
-        "Running…"
+        t("progress.running")
       } else if model.run_status == Some(RunStatus::Cancelled) {
-        "Not run"
+        t("progress.not_run")
       } else {
-        "Pending"
+        t("progress.pending")
       }
     };
     let indicator = |id: &str| -> AnyElement {
@@ -78,7 +79,7 @@ impl Workspace {
         .child(div().flex_1())
         .child(if model.is_executing {
           Button::new("cancel-run")
-            .label(if model.is_cancelling { "Cancelling…" } else { "Cancel" })
+            .label(if model.is_cancelling { t("activity.cancelling") } else { t("progress.cancel") })
             .small()
             .disabled(model.is_cancelling)
             .on_click(move |_, _, cx| cancel_model.update(cx, |model, cx| model.cancel(cx)))
@@ -88,8 +89,8 @@ impl Workspace {
             .ghost()
             .xsmall()
             .icon(Icon::new(Lucide::X))
-            .tooltip("Dismiss")
-            .accessibility_label("Dismiss")
+            .tooltip(t("progress.dismiss"))
+            .accessibility_label(t("progress.dismiss"))
             .on_click(move |_, _, cx| dismiss_model.update(cx, |model, cx| model.dismiss_run_status(cx)))
             .into_any_element()
         })
@@ -105,7 +106,7 @@ impl Workspace {
             .when_some(result.before.clone().zip(result.after.clone()).filter(|(b, a)| b != a), |this, (before, after)| {
               this.child(mono(format!("{before} → {after}")).text_size(px(11.)).text_color(theme.muted_foreground))
             })
-            .child(div().text_size(px(11.)).text_color(status_color(result.status)).child(result.status.label())),
+            .child(div().text_size(px(11.)).text_color(status_color(result.status)).child(step_status_label(result.status))),
           None => h_flex().child(caption(pending(&step.id), cx)),
         };
         rows = rows
@@ -128,9 +129,9 @@ impl Workspace {
             h_flex()
               .gap_2()
               .child(indicator("shell"))
-              .child(div().text_size(px(13.)).child("Terminal PATH"))
+              .child(div().text_size(px(13.)).child(t("progress.terminal_path")))
               .child(div().flex_1())
-              .child(caption(shell.map(|r| r.status.label()).unwrap_or_else(|| pending("shell")), cx)),
+              .child(caption(shell.map(|r| step_status_label(r.status)).unwrap_or_else(|| pending("shell")), cx)),
           )
           .when_some(shell.and_then(|r| r.message.clone()), |this, message| this.child(div().text_size(px(11.)).text_color(orange()).child(message)));
       }
@@ -139,34 +140,28 @@ impl Workspace {
     let installer = model.installer_path.is_some().then(|| {
       let open_model = self.model.clone();
       let continue_model = self.model.clone();
-      v_flex()
-        .gap_3()
-        .pt_3()
-        .border_t_1()
-        .border_color(theme.border)
-        .child(div().text_size(px(13.)).child("Complete the Homebrew installation in macOS Installer, then verify it here."))
-        .child(
-          h_flex()
-            .gap_2()
-            .child(
-              Button::new("open-installer")
-                .label("Open Installer")
-                .disabled(model.is_cancelling)
-                .on_click(move |_, _, cx| open_model.update(cx, |model, cx| model.open_installer(cx))),
-            )
-            .child(
-              Button::new("continue-installer")
-                .primary()
-                .label("Verify and Continue")
-                .disabled(model.is_cancelling)
-                .on_click(move |_, _, cx| continue_model.update(cx, |model, cx| model.continue_after_installer(cx))),
-            ),
-        )
+      v_flex().gap_3().pt_3().border_t_1().border_color(theme.border).child(div().text_size(px(13.)).child(t("progress.installer_note"))).child(
+        h_flex()
+          .gap_2()
+          .child(
+            Button::new("open-installer")
+              .label(t("progress.open_installer"))
+              .disabled(model.is_cancelling)
+              .on_click(move |_, _, cx| open_model.update(cx, |model, cx| model.open_installer(cx))),
+          )
+          .child(
+            Button::new("continue-installer")
+              .primary()
+              .label(t("progress.verify"))
+              .disabled(model.is_cancelling)
+              .on_click(move |_, _, cx| continue_model.update(cx, |model, cx| model.continue_after_installer(cx))),
+          ),
+      )
     });
 
     let footer = match model.run_status {
-      Some(RunStatus::Succeeded) => Some("Tools verified. Open a new terminal session if PATH changed."),
-      Some(RunStatus::Cancelled) => Some("Completed changes are preserved. Scan again to create a new plan."),
+      Some(RunStatus::Succeeded) => Some(t("progress.footer_ok")),
+      Some(RunStatus::Cancelled) => Some(t("progress.footer_cancelled")),
       _ => None,
     };
     let progress = model.results.len() as f32 / model.progress_total().max(1) as f32 * 100.;

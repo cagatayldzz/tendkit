@@ -3,8 +3,13 @@
 Use English for all project-owned identifiers, comments, UI text, logs,
 diagnostics, test descriptions and fixtures, documentation, and build scripts.
 Keep the application's development language set to English (`en`).
-Do not add translations or other-language copies unless explicitly requested.
 The conversation can follow the user's preferred language.
+
+Interface translations are the one exception, and they live only in
+`crates/i18n/locales/<code>.txt` (`en` is the source of truth). Every user-visible
+string goes through `tendkit_i18n::t`/`tf`; add the key to every locale file
+(`cargo test -p tendkit-i18n` fails on a missing key or a changed placeholder).
+Engine and updater diagnostics stay English.
 
 # Formatting
 
@@ -23,7 +28,7 @@ dependency direction is enforced by `bun run check:layers`:
   nothing else in the workspace.
 - Engine layers: `process` → `detect` → `plan` → `execute` (plus `shellrc`).
   They never depend on the client, model, or UI crates.
-- Application layers: `storage`, `client`, and `updater` (→ `version`) → `model` → `ui`. They never depend
+- Application layers: `storage`, `client`, and `updater` (→ `version`) → `model` → `ui`; `i18n` has no dependencies and is used by `model`, `ui`, and the app. They never depend
   on the engine crates.
 - Every package declares its allowed dependencies in
   `[package.metadata.layers]`. Define the layer decision for each new crate or

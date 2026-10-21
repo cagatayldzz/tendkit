@@ -14,6 +14,7 @@ use gpui_kit::{
   *,
 };
 use gpui_kit_assets::IconName as Lucide;
+use tendkit_i18n::tf;
 use tendkit_model::APP_VERSION;
 
 impl Workspace {
@@ -58,8 +59,10 @@ impl Workspace {
             .text_size(px(11.))
             .text_color(theme.muted_foreground)
             .child(div().size(px(5.)).rounded_full().bg(if stable { green() } else { orange() }))
-            .child(format!("{} · v{APP_VERSION}", if stable { "Stable" } else { "DEV" }))
-            .tooltip(|window, cx| component::tooltip::Tooltip::new(format!("TendKit {}", platform::channel())).build(window, cx)),
+            .child(format!("{} · v{APP_VERSION}", platform::channel_label()))
+            .tooltip(|window, cx| {
+              component::tooltip::Tooltip::new(tf("channel.tooltip", &[("channel", &platform::channel_label())])).build(window, cx)
+            }),
         ),
       )
   }

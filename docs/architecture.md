@@ -22,6 +22,7 @@ apps/tendkit-engine ──► execute ──► plan ──► detect ──► 
 | `protocol` | `InstallPlan`, `InstallStep`, `Recipe`, `Installation`, events, `EventDecoder`, `EngineRequest` | serde |
 | `storage` | data directory, atomic writes, latest-version cache, window size, OpenCommit config, zsh instruction block | serde |
 | `version` | numeric version comparison | none |
+| `i18n` | `Language`, system language detection, `t`/`tf` over `locales/*.txt` | none |
 | `updater` | release lookup, download, verification, bundle swap | version |
 | `client` | `EngineConnection` (spawn, cancel, acknowledge, watchdog), `EventValidator` | protocol |
 | `model` | `AppModel`, `ToolRow`, tool update status, scan/plan/execute state, app update state | client, storage, updater, version, protocol, gpui-kit |

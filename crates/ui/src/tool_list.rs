@@ -13,6 +13,7 @@ use gpui_kit::{
   *,
 };
 use gpui_kit_assets::IconName as Lucide;
+use tendkit_i18n::{t, tf};
 use tendkit_model::{ToolCategory, UpdateStatus};
 
 impl Workspace {
@@ -30,10 +31,12 @@ impl Workspace {
       .iter()
       .map(|tool| {
         let line = match model.update_status(tool) {
-          Some(UpdateStatus::Available { installed, latest }) => (format!("{installed} → {latest}"), orange(), true),
+          Some(UpdateStatus::Available { installed, latest }) => (format!("{installed} → {latest}"), orange(), model.can_update(tool)),
           Some(UpdateStatus::UpToDate) => (tool.installed_version().unwrap_or_default().to_string(), green(), false),
-          _ if tool.scanned => (tool.installed_version().unwrap_or("Not installed").to_string(), theme.muted_foreground, false),
-          _ => ("Waiting for scan".to_string(), theme.muted_foreground, false),
+          _ if tool.scanned => {
+            (tool.installed_version().map(str::to_string).unwrap_or_else(|| t("status.not_installed")), theme.muted_foreground, false)
+          }
+          _ => (t("status.waiting"), theme.muted_foreground, false),
         };
         (tool.id, line)
       })
@@ -58,18 +61,18 @@ impl Workspace {
           .text_color(if updating && !searching { green() } else { theme.muted_foreground }),
         )
         .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).child(if searching {
-          "No Results"
+          t("list.no_results")
         } else if updating {
-          "Everything is up to date"
+          t("list.up_to_date_title")
         } else {
-          "No Tools"
+          t("list.no_tools")
         }))
         .child(div().text_size(px(12.)).text_center().text_color(theme.muted_foreground).child(if searching {
-          "Try another tool name or installation source."
+          t("list.no_results_hint")
         } else if updating {
-          "Use Check for Updates in All Tools to look again."
+          t("list.up_to_date_hint")
         } else {
-          "Your developer tools will appear here."
+          t("list.empty_hint")
         }))
         .into_any_element()
     } else {
@@ -107,7 +110,7 @@ impl Workspace {
                     .child(div().text_size(px(13.)).font_weight(FontWeight::MEDIUM).truncate().child(tool.name))
                     .child(div().text_size(px(11.)).text_color(status_color).truncate().child(status)),
                 )
-                .when(has_update, |this| this.child(Tag::warning().small().child("Update")))
+                .when(has_update, |this| this.child(Tag::warning().small().child(t("action.update"))))
                 .child(selection_checkbox(&self.model, tool, false, cx)),
             ),
           );
@@ -126,11 +129,11 @@ impl Workspace {
         .text_color(theme.muted_foreground)
         .child(if scanning { Icon::new(IconName::RefreshCw) } else { Icon::new(Lucide::ShieldCheck) }.size(px(12.)))
         .child(if scanning {
-          format!("{scanned} of {total} scanned")
+          tf("list.scanned", &[("scanned", &scanned.to_string()), ("total", &total.to_string())])
         } else if updating {
-          format!("{updatable} to update")
+          tf("list.to_update", &[("count", &updatable.to_string())])
         } else {
-          format!("{installed} of {total} installed")
+          tf("statusbar.installed_count", &[("installed", &installed.to_string()), ("total", &total.to_string())])
         })
         .child(div().flex_1())
         .when(updatable > 0, |this| {
@@ -138,7 +141,7 @@ impl Workspace {
             Button::new("update-all-list")
               .primary()
               .xsmall()
-              .label("Update All")
+              .label(t("action.update_all"))
               .disabled(busy)
               .on_click(cx.listener(|this, _, _, cx| this.model.update(cx, |model, cx| model.update_all(cx)))),
           )

@@ -9,12 +9,13 @@ description = "TendKit interface views built with GPUI Kit"
 
 [package.metadata.layers]
 # Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["tendkit-model", "tendkit-protocol", "tendkit-storage", "tendkit-updater", "gpui-kit", "gpui-kit-assets", "libc"]
+dependencies = ["tendkit-i18n", "tendkit-model", "tendkit-protocol", "tendkit-storage", "tendkit-updater", "gpui-kit", "gpui-kit-assets", "libc"]
 
 [lints]
 workspace = true
 
 [dependencies]
+tendkit-i18n.workspace = true
 tendkit-model.workspace = true
 tendkit-protocol.workspace = true
 tendkit-storage.workspace = true

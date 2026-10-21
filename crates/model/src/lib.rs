@@ -14,6 +14,7 @@ use std::{
   time::{Duration, SystemTime},
 };
 use tendkit_client::{EngineConnection, Request};
+use tendkit_i18n::{system_language, Language};
 use tendkit_protocol::{EngineEvent, EngineFailure, EventType, InstallPlan, Installation, RunStatus, StepStatus, TOOL_IDS};
 use tendkit_storage::{AppSettings, LatestVersionCache};
 use tendkit_updater::{Release, Staged};
@@ -30,14 +31,22 @@ pub enum ToolCategory {
 impl ToolCategory {
   pub const ALL: [Self; 5] = [Self::PackageManager, Self::JavaScript, Self::Python, Self::Rust, Self::Ai];
 
-  pub fn title(self) -> &'static str {
+  fn key(self) -> &'static str {
     match self {
-      Self::PackageManager => "Package Manager",
-      Self::JavaScript => "JavaScript",
-      Self::Python => "Python",
-      Self::Rust => "Rust",
-      Self::Ai => "AI Tools",
+      Self::PackageManager => "category.package_manager",
+      Self::JavaScript => "category.javascript",
+      Self::Python => "category.python",
+      Self::Rust => "category.rust",
+      Self::Ai => "category.ai",
     }
+  }
+
+  pub fn title(self) -> String {
+    tendkit_i18n::t(self.key())
+  }
+
+  pub fn description(self) -> String {
+    tendkit_i18n::t(&format!("{}.description", self.key()))
   }
 }
 
@@ -45,7 +54,6 @@ impl ToolCategory {
 pub struct ToolRow {
   pub id: &'static str,
   pub name: &'static str,
-  pub subtitle: &'static str,
   pub installations: Vec<Installation>,
   /// Reported by the engine, which owns the installation source rules.
   pub manageable: bool,
@@ -55,19 +63,24 @@ pub struct ToolRow {
 impl ToolRow {
   /// Display metadata only; the tool list itself comes from `TOOL_IDS`.
   fn new(id: &'static str) -> Self {
-    let (name, subtitle) = match id {
-      "homebrew" => ("Homebrew", "macOS package manager"),
-      "node" => ("Node.js", "JavaScript runtime"),
-      "npm" => ("npm", "Node.js package manager"),
-      "bun" => ("Bun", "JavaScript toolkit"),
-      "python" => ("Python", "Scripting, automation, and data science"),
-      "rust" => ("Rust", "Fast, reliable systems programming"),
-      "codex" => ("Codex", "OpenAI coding agent"),
-      "claude" => ("Claude Code", "Anthropic coding agent"),
-      "opencommit" => ("OpenCommit", "Commit message assistant"),
-      _ => (id, "Developer tool"),
+    let name = match id {
+      "homebrew" => "Homebrew",
+      "node" => "Node.js",
+      "npm" => "npm",
+      "bun" => "Bun",
+      "python" => "Python",
+      "rust" => "Rust",
+      "codex" => "Codex",
+      "claude" => "Claude Code",
+      "opencommit" => "OpenCommit",
+      _ => id,
     };
-    Self { id, name, subtitle, installations: Vec::new(), manageable: false, scanned: false }
+    Self { id, name, installations: Vec::new(), manageable: false, scanned: false }
+  }
+
+  /// A short description in the active language.
+  pub fn subtitle(&self) -> String {
+    tendkit_i18n::t(&format!("tool.{}.subtitle", self.id))
   }
 
   pub fn category(&self) -> ToolCategory {
@@ -161,6 +174,29 @@ pub struct AppModel {
   connection: Option<Arc<EngineConnection>>,
 }
 
+/// An engine failure in the active language. Messages from the engine itself stay as reported.
+fn failure_text(error: &EngineFailure) -> String {
+  match error {
+    EngineFailure::Unavailable => tendkit_i18n::t("err.engine_unavailable"),
+    EngineFailure::InvalidProtocol => tendkit_i18n::t("err.engine_protocol"),
+    EngineFailure::Incomplete => tendkit_i18n::t("err.engine_incomplete"),
+    EngineFailure::OversizedMessage => tendkit_i18n::t("err.engine_oversized"),
+    EngineFailure::Failed(message) => message.clone(),
+  }
+}
+
+/// Switches both TendKit's texts and the built-in texts of the interface kit.
+pub(crate) fn apply_language(language: Language) {
+  tendkit_i18n::set_language(language);
+  gpui_kit::component::set_locale(language.code());
+}
+
+/// The language to show: the saved choice, or else the language of this computer
+/// (English when the computer's languages are not supported).
+fn effective_language(settings: &AppSettings) -> Language {
+  settings.language.as_deref().and_then(Language::from_code).unwrap_or_else(system_language)
+}
+
 impl Default for AppModel {
   fn default() -> Self {
     Self::new()
@@ -170,6 +206,7 @@ impl Default for AppModel {
 impl AppModel {
   pub fn new() -> Self {
     let settings = AppSettings::load(&AppSettings::default_path());
+    apply_language(effective_language(&settings));
     Self {
       tools: TOOL_IDS.iter().map(|id| ToolRow::new(id)).collect(),
       is_scanning: false,
@@ -246,13 +283,19 @@ impl AppModel {
     matches!(self.update_status(tool), Some(UpdateStatus::Available { .. }))
   }
 
-  /// Tools with an update that TendKit can apply. npm updates with Node.js.
+  /// Whether TendKit can apply the update. A newer release can exist without being
+  /// actionable: npm updates with Node.js, and externally managed tools stay with their manager.
+  pub fn can_update(&self, tool: &ToolRow) -> bool {
+    tool.id != "npm" && self.can_manage(tool) && self.has_update(tool)
+  }
+
+  /// Tools with an update that TendKit can apply.
   pub fn updatable_ids(&self) -> BTreeSet<String> {
-    self.tools.iter().filter(|t| t.id != "npm" && self.can_manage(t) && self.has_update(t)).map(|t| t.id.to_string()).collect()
+    self.tools.iter().filter(|t| self.can_update(t)).map(|t| t.id.to_string()).collect()
   }
 
   pub fn update_count(&self) -> usize {
-    self.tools.iter().filter(|t| self.has_update(t)).count()
+    self.tools.iter().filter(|t| self.can_update(t)).count()
   }
 
   pub fn is_checking_updates(&self) -> bool {
@@ -374,7 +417,7 @@ impl AppModel {
           model.latest_versions.insert(done_tool.clone(), stale.version.clone());
           model.log.push(format!("Latest {done_tool} version check failed; showing cached {}: {error}", stale.version));
         } else {
-          model.latest_version_errors.insert(done_tool, error.to_string());
+          model.latest_version_errors.insert(done_tool, failure_text(&error));
         }
       },
     );
@@ -422,7 +465,7 @@ impl AppModel {
             model.check_all_latest(false, cx);
           }
           Err(error) => {
-            model.error = Some(error.to_string());
+            model.error = Some(failure_text(&error));
             model.log.push(format!("Error: {error}"));
           }
         }
@@ -550,7 +593,7 @@ impl AppModel {
     let Some(path) = self.installer_path.clone() else { return };
     let opened = std::process::Command::new("/usr/bin/open").arg(&path).status().map(|s| s.success()).unwrap_or(false);
     if !opened {
-      self.error = Some("Could not open macOS Installer. Try reopening the package or cancel the operation.".into());
+      self.error = Some(tendkit_i18n::t("err.installer_open"));
     }
     cx.notify();
   }
@@ -567,7 +610,7 @@ impl AppModel {
   }
 
   fn record(&mut self, error: &EngineFailure) {
-    self.error = Some(error.to_string());
+    self.error = Some(failure_text(error));
     self.append_log(&format!("Error: {error}"));
   }
 
@@ -607,7 +650,7 @@ impl AppModel {
             self.append_log(data.message.as_deref().unwrap_or("Waiting for macOS Installer."));
           }
           None => {
-            self.error = Some("The Installer package is outside the expected temporary directory.".into());
+            self.error = Some(tendkit_i18n::t("err.installer_path"));
             if self.is_executing && !self.is_cancelling {
               self.is_cancelling = true;
               if let Some(connection) = &self.connection {

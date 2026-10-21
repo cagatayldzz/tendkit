@@ -16,6 +16,7 @@ use gpui_kit::{
   },
   *,
 };
+use tendkit_i18n::{t, tf};
 use tendkit_storage::{shell_context, OpenCommitConfig};
 
 type Choice = SelectState<Vec<SharedString>>;
@@ -30,11 +31,11 @@ fn options<T: Clone + PartialEq>(supported: &[T], current: &T) -> Vec<T> {
 }
 
 fn token_label(limit: u32) -> SharedString {
-  let label = format!("{} tokens", platform::grouped(limit));
+  let label = tf("oc.tokens", &[("count", &platform::grouped(limit))]);
   if limit == OpenCommitConfig::RECOMMENDED_INPUT_TOKENS {
-    format!("{label} (Recommended)").into()
+    tf("oc.recommended", &[("label", &label)]).into()
   } else if limit == OpenCommitConfig::OPENCOMMIT_DEFAULT_INPUT_TOKENS {
-    format!("{label} (OpenCommit default)").into()
+    tf("oc.opencommit_default", &[("label", &label)]).into()
   } else {
     label.into()
   }
@@ -59,7 +60,7 @@ impl OpenCommitSettings {
   fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
     let mut error = None;
     let config = OpenCommitConfig::load(&OpenCommitConfig::default_path()).unwrap_or_else(|e| {
-      error = Some(format!("Could not read {}: {e}", OpenCommitConfig::default_path().display()));
+      error = Some(tf("oc.read_error", &[("path", &OpenCommitConfig::default_path().display().to_string()), ("error", &e.to_string())]));
       OpenCommitConfig::default()
     });
     let instruction = shell_context::load(&shell_context::default_path()).unwrap_or_else(|e| {
@@ -86,13 +87,13 @@ impl OpenCommitSettings {
     );
     let instruction_text = instruction.unwrap_or_else(|| shell_context::DEFAULT_INSTRUCTION.into());
     let instruction =
-      cx.new(|cx| TextareaState::new(window, cx).auto_grow(3, 6).placeholder("No extra instructions").default_value(instruction_text));
+      cx.new(|cx| TextareaState::new(window, cx).auto_grow(3, 6).placeholder(t("oc.no_instructions")).default_value(instruction_text));
     let toggles = [
-      ("OCO_ONE_LINE_COMMIT", "One-line commit", config.bool("OCO_ONE_LINE_COMMIT", false)),
-      ("OCO_DESCRIPTION", "Add description", config.bool("OCO_DESCRIPTION", false)),
-      ("OCO_WHY", "Explain why the change was made", config.bool("OCO_WHY", false)),
-      ("OCO_EMOJI", "Use GitMoji", config.bool("OCO_EMOJI", false)),
-      ("OCO_OMIT_SCOPE", "Omit scope", config.bool("OCO_OMIT_SCOPE", false)),
+      ("OCO_ONE_LINE_COMMIT", "oc.one_line", config.bool("OCO_ONE_LINE_COMMIT", false)),
+      ("OCO_DESCRIPTION", "oc.description", config.bool("OCO_DESCRIPTION", false)),
+      ("OCO_WHY", "oc.why", config.bool("OCO_WHY", false)),
+      ("OCO_EMOJI", "oc.gitmoji", config.bool("OCO_EMOJI", false)),
+      ("OCO_OMIT_SCOPE", "oc.omit_scope", config.bool("OCO_OMIT_SCOPE", false)),
     ];
     let git_push = config.bool("OCO_GITPUSH", true);
     Self { config, models, model, token_limits, max_input_tokens, languages, language, toggles, git_push, instruction, error }
@@ -120,21 +121,14 @@ impl OpenCommitSettings {
     match result {
       Ok(()) => true,
       Err(error) => {
-        self.error = Some(format!("Could not save settings: {error}"));
+        self.error = Some(tf("oc.save_error", &[("error", &error)]));
         cx.notify();
         false
       }
     }
   }
 
-  fn switch(
-    &self,
-    id: &'static str,
-    label: &'static str,
-    checked: bool,
-    cx: &mut Context<Self>,
-    set: impl Fn(&mut Self, bool) + 'static,
-  ) -> AnyElement {
+  fn switch(&self, id: &'static str, label: String, checked: bool, cx: &mut Context<Self>, set: impl Fn(&mut Self, bool) + 'static) -> AnyElement {
     h_flex()
       .text_size(px(13.))
       .child(label)
@@ -149,7 +143,7 @@ impl OpenCommitSettings {
 
 impl Render for OpenCommitSettings {
   fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-    let picker = |label: &'static str, state: &Entity<Choice>| {
+    let picker = |label: String, state: &Entity<Choice>| {
       h_flex()
         .gap_4()
         .text_size(px(13.))
@@ -159,18 +153,18 @@ impl Render for OpenCommitSettings {
         .into_any_element()
     };
     let generation = vec![
-      picker("Model", &self.model),
-      picker("Max diff size", &self.max_input_tokens),
-      picker("Language", &self.language),
-      labeled("Commit convention", "Conventional Commits", cx),
+      picker(t("oc.model"), &self.model),
+      picker(t("oc.max_diff"), &self.max_input_tokens),
+      picker(t("oc.language"), &self.language),
+      labeled(t("oc.convention"), "Conventional Commits", cx),
     ];
     let message = self
       .toggles
       .iter()
       .enumerate()
-      .map(|(index, (key, label, value))| self.switch(key, label, *value, cx, move |this, checked| this.toggles[index].2 = checked))
+      .map(|(index, (key, label, value))| self.switch(key, t(label), *value, cx, move |this, checked| this.toggles[index].2 = checked))
       .collect();
-    let git = vec![self.switch("OCO_GITPUSH", "Push after committing", self.git_push, cx, |this, checked| this.git_push = checked)];
+    let git = vec![self.switch("OCO_GITPUSH", t("oc.push"), self.git_push, cx, |this, checked| this.git_push = checked)];
     let path = OpenCommitConfig::default_path();
 
     v_flex()
@@ -178,25 +172,10 @@ impl Render for OpenCommitSettings {
       .max_h(px(470.))
       .overflow_y_scroll()
       .gap(px(18.))
-      .child(section(
-        "Generation",
-        generation,
-        Some("Larger diffs are split per file and their messages are joined into one long title. A higher limit keeps one message per commit at a slightly higher token cost.".into()),
-        cx,
-      ))
-      .child(section("Message", message, None, cx))
-      .child(section(
-        "Commit Instructions",
-        vec![Textarea::new(&self.instruction).into_any_element()],
-        Some("Sent to the model with every oco or opencommit run in zsh. Saved as shell functions in ~/.zshrc after a backup; open a new terminal to apply. Leave empty to remove them.".into()),
-        cx,
-      ))
-      .child(section(
-        "Git",
-        git,
-        Some(format!("Saved to {}. API keys and other settings are preserved. Values in a project's .env file override these.", path.display()).into()),
-        cx,
-      ))
+      .child(section(t("oc.generation"), generation, Some(t("oc.generation_note").into()), cx))
+      .child(section(t("oc.message"), message, None, cx))
+      .child(section(t("oc.instructions"), vec![Textarea::new(&self.instruction).into_any_element()], Some(t("oc.instructions_note").into()), cx))
+      .child(section(t("oc.git"), git, Some(tf("oc.git_note", &[("path", &path.display().to_string())]).into()), cx))
       .when_some(self.error.clone(), |this, error| {
         this.child(h_flex().gap_2().text_size(px(13.)).text_color(orange()).child(Icon::new(IconName::TriangleAlert).size(px(13.))).child(error))
       })
@@ -208,21 +187,17 @@ impl Workspace {
     let settings = cx.new(|cx| OpenCommitSettings::new(window, cx));
     window.open_dialog(cx, move |dialog, _, _| {
       let save = settings.clone();
-      dialog
-        .w(px(480.))
-        .title(div().text_size(px(17.)).font_weight(FontWeight::SEMIBOLD).child("OpenCommit Settings"))
-        .child(settings.clone())
-        .footer(
-          h_flex()
-            .w_full()
-            .child(Button::new("opencommit-cancel").label("Cancel").on_click(|_, window, cx| window.close_dialog(cx)))
-            .child(div().flex_1())
-            .child(Button::new("opencommit-save").primary().label("Save").on_click(move |_, window, cx| {
-              if save.update(cx, |settings, cx| settings.save(cx)) {
-                window.close_dialog(cx);
-              }
-            })),
-        )
+      dialog.w(px(480.)).title(div().text_size(px(17.)).font_weight(FontWeight::SEMIBOLD).child(t("oc.title"))).child(settings.clone()).footer(
+        h_flex()
+          .w_full()
+          .child(Button::new("opencommit-cancel").label(t("progress.cancel")).on_click(|_, window, cx| window.close_dialog(cx)))
+          .child(div().flex_1())
+          .child(Button::new("opencommit-save").primary().label(t("action.save")).on_click(move |_, window, cx| {
+            if save.update(cx, |settings, cx| settings.save(cx)) {
+              window.close_dialog(cx);
+            }
+          })),
+      )
     });
   }
 }

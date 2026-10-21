@@ -6184,6 +6184,7 @@ name = "tendkit"
 version = "0.1.0"
 dependencies = [
  "gpui-kit",
+ "tendkit-i18n",
  "tendkit-model",
  "tendkit-storage",
  "tendkit-ui",
@@ -6232,12 +6233,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tendkit-i18n"
+version = "0.1.0"
+
+[[package]]
 name = "tendkit-model"
 version = "0.1.0"
 dependencies = [
  "futures",
  "gpui-kit",
  "tendkit-client",
+ "tendkit-i18n",
  "tendkit-protocol",
  "tendkit-storage",
  "tendkit-updater",
@@ -6290,6 +6296,7 @@ dependencies = [
  "gpui-kit",
  "gpui-kit-assets",
  "libc",
+ "tendkit-i18n",
  "tendkit-model",
  "tendkit-protocol",
  "tendkit-storage",

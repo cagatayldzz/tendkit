@@ -25,6 +25,7 @@ use gpui_kit::{
   *,
 };
 use std::time::SystemTime;
+use tendkit_i18n::{t, tf};
 use tendkit_model::{AppModel, AppUpdate};
 
 pub use assets::Assets;
@@ -67,20 +68,20 @@ pub enum Destination {
 impl Destination {
   pub const ALL: [Self; 4] = [Self::AllTools, Self::Installed, Self::Updates, Self::Settings];
 
-  pub fn title(self) -> &'static str {
-    match self {
-      Self::AllTools => "All Tools",
-      Self::Installed => "Installed",
-      Self::Updates => "Updates",
-      Self::Settings => "Settings",
-    }
+  pub fn title(self) -> String {
+    t(match self {
+      Self::AllTools => "nav.all_tools",
+      Self::Installed => "nav.installed",
+      Self::Updates => "nav.updates",
+      Self::Settings => "nav.settings",
+    })
   }
 
   pub fn includes(self, tool: &tendkit_model::ToolRow, model: &AppModel) -> bool {
     match self {
       Self::AllTools | Self::Settings => true,
       Self::Installed => tool.installed_version().is_some(),
-      Self::Updates => model.has_update(tool),
+      Self::Updates => model.can_update(tool),
     }
   }
 }
@@ -106,7 +107,7 @@ impl Workspace {
   pub fn new(model: Entity<AppModel>, window: &mut Window, cx: &mut Context<Self>) -> Self {
     cx.bind_keys([KeyBinding::new("up", SelectPrevious, Some(CONTEXT)), KeyBinding::new("down", SelectNext, Some(CONTEXT))]);
     apply_theme(window, cx);
-    let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search tools"));
+    let search = cx.new(|cx| InputState::new(window, cx).placeholder(t("search.placeholder")));
     let subscriptions = vec![
       cx.observe_window_appearance(window, |_, window, cx| apply_theme(window, cx)),
       cx.subscribe(&search, |_, _, event: &InputEvent, cx| {
@@ -153,7 +154,7 @@ impl Workspace {
       .filter(|tool| {
         self.destination.includes(tool, model) && (self.destination != Destination::AllTools || self.catalog_filter.includes(tool, model)) && {
           query.is_empty() || {
-            let haystack = format!("{} {} {}", tool.name, tool.subtitle, tool.primary().map(|i| i.source.as_str()).unwrap_or(""));
+            let haystack = format!("{} {} {}", tool.name, tool.subtitle(), tool.primary().map(|i| i.source.as_str()).unwrap_or(""));
             haystack.to_lowercase().contains(&query)
           }
         }
@@ -170,11 +171,7 @@ impl Workspace {
     }
     self.notified_update = Some(release.version.clone());
     window.push_notification(
-      component::notification::Notification::info(format!(
-        "TendKit {} is ready to download. Open Settings → Updates to install it.",
-        release.version
-      ))
-      .title("Update available"),
+      component::notification::Notification::info(tf("notify.update_body", &[("version", &release.version)])).title(t("notify.update_title")),
       cx,
     );
   }
@@ -229,9 +226,9 @@ impl Workspace {
   fn toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
     let theme = cx.theme().clone();
     let subtitle = match self.destination {
-      Destination::Settings => "Preferences".to_string(),
-      Destination::Updates => format!("{} available", self.visible_tools(cx).len()),
-      _ => format!("{} tools", self.visible_tools(cx).len()),
+      Destination::Settings => t("toolbar.preferences"),
+      Destination::Updates => tf("toolbar.updates_available", &[("count", &self.visible_tools(cx).len().to_string())]),
+      _ => tf("toolbar.tools_count", &[("count", &self.visible_tools(cx).len().to_string())]),
     };
     let busy = self.model.read(cx).busy();
     TitleBar::new().h(TOOLBAR_HEIGHT).pl_4().bg(theme.background).border_color(theme.border).child(
@@ -262,7 +259,7 @@ impl Workspace {
                 .ghost()
                 .small()
                 .icon(IconName::RefreshCw)
-                .tooltip("Rescan your tools and check for updates")
+                .tooltip(t("toolbar.rescan_tooltip"))
                 .disabled(busy)
                 .on_click(|_, window, cx| window.dispatch_action(Box::new(ScanAgain), cx)),
             )

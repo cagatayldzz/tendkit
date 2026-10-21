@@ -12,6 +12,7 @@ use gpui_kit::{
   *,
 };
 use std::collections::BTreeSet;
+use tendkit_i18n::{t, tf};
 use tendkit_model::{AppModel, ToolCategory, ToolRow};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -28,7 +29,7 @@ impl CatalogFilter {
     match self {
       Self::All => true,
       Self::Installed => tool.installed_version().is_some(),
-      Self::Updates => model.has_update(tool),
+      Self::Updates => model.can_update(tool),
       Self::NotInstalled => tool.scanned && tool.installations.is_empty(),
     }
   }
@@ -40,14 +41,12 @@ impl Workspace {
     if self.focused_tool.is_some_and(|id| self.visible_tools(cx).iter().any(|tool| tool.id == id)) {
       return v_flex()
         .size_full()
-        .child(div().px_5().pt_3().child(
-          Button::new("back-to-catalog").ghost().small().icon(IconName::ArrowLeft).label("Back to All Tools").on_click(cx.listener(
-            |this, _, _, cx| {
-              this.focused_tool = None;
-              cx.notify();
-            },
-          )),
-        ))
+        .child(div().px_5().pt_3().child(Button::new("back-to-catalog").ghost().small().icon(IconName::ArrowLeft).label(t("catalog.back")).on_click(
+          cx.listener(|this, _, _, cx| {
+            this.focused_tool = None;
+            cx.notify();
+          }),
+        )))
         .child(div().flex_1().min_h_0().child(self.render_detail(window, cx)))
         .into_any_element();
     }
@@ -69,17 +68,17 @@ impl Workspace {
 
     let mut filters = h_flex().gap_2();
     for (filter, label) in [
-      (CatalogFilter::All, "All tools"),
-      (CatalogFilter::Installed, "Installed"),
-      (CatalogFilter::Updates, "Updates"),
-      (CatalogFilter::NotInstalled, "Not installed"),
+      (CatalogFilter::All, "filter.all"),
+      (CatalogFilter::Installed, "nav.installed"),
+      (CatalogFilter::Updates, "nav.updates"),
+      (CatalogFilter::NotInstalled, "status.not_installed"),
     ] {
       let active = self.catalog_filter == filter;
       filters = filters.child(
         Button::new(SharedString::from(format!("catalog-filter-{label}")))
           .ghost()
           .small()
-          .label(label)
+          .label(t(label))
           .when(active, |button| button.bg(theme.blue.opacity(0.12)).text_color(theme.blue))
           .on_click(cx.listener(move |this, _, _, cx| {
             this.catalog_filter = filter;
@@ -96,15 +95,15 @@ impl Workspace {
       .child(
         h_flex()
           .gap_3()
-          .child(self.stat_tile("Installed", format!("{installed}/{total}"), green(), CatalogFilter::Installed, cx))
+          .child(self.stat_tile("nav.installed", format!("{installed}/{total}"), green(), CatalogFilter::Installed, cx))
           .child(self.stat_tile(
-            "Updates",
+            "nav.updates",
             updates.to_string(),
             if updates > 0 { orange() } else { theme.muted_foreground },
             CatalogFilter::Updates,
             cx,
           ))
-          .child(self.stat_tile("Not installed", not_installed.to_string(), theme.muted_foreground, CatalogFilter::NotInstalled, cx)),
+          .child(self.stat_tile("status.not_installed", not_installed.to_string(), theme.muted_foreground, CatalogFilter::NotInstalled, cx)),
       )
       .child(
         h_flex()
@@ -116,30 +115,38 @@ impl Workspace {
               .text_color(theme.muted_foreground)
               .child(Icon::new(if scanning || checking { IconName::RefreshCw } else { IconName::CircleCheck }).size(px(13.)))
               .child(if scanning {
-                "Scanning tools…".to_string()
+                t("activity.scanning")
               } else if checking {
-                "Checking for updates…".to_string()
+                t("catalog.checking")
               } else if let Some(time) = last_check {
-                format!("Updates checked at {time}")
+                tf("catalog.checked_at", &[("time", &time)])
               } else {
-                "Updates not checked yet".to_string()
+                t("catalog.not_checked")
               }),
           )
           .child(div().flex_1())
           .child(
-            Button::new("check-updates").ghost().small().icon(IconName::RefreshCw).label("Check for Updates").disabled(busy || checking).on_click(
-              cx.listener(|this, _, _, cx| {
+            Button::new("check-updates")
+              .ghost()
+              .small()
+              .icon(IconName::RefreshCw)
+              .label(t("action.check_updates"))
+              .disabled(busy || checking)
+              .on_click(cx.listener(|this, _, _, cx| {
                 this.model.update(cx, |model, cx| model.check_all_latest(true, cx));
-              }),
-            ),
+              })),
           )
           .when(updatable > 0, |this| {
             this.child(
-              Button::new("update-all").primary().small().icon(IconName::ArrowUp).label(format!("Update All ({updatable})")).disabled(busy).on_click(
-                cx.listener(|this, _, _, cx| {
+              Button::new("update-all")
+                .primary()
+                .small()
+                .icon(IconName::ArrowUp)
+                .label(tf("action.update_all_count", &[("count", &updatable.to_string())]))
+                .disabled(busy)
+                .on_click(cx.listener(|this, _, _, cx| {
                   this.model.update(cx, |model, cx| model.update_all(cx));
-                }),
-              ),
+                })),
             )
           }),
       )
@@ -159,8 +166,8 @@ impl Workspace {
           .py(px(60.))
           .text_color(theme.muted_foreground)
           .child(Icon::new(IconName::Search).size(px(28.)))
-          .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).child("No matching tools"))
-          .child(div().text_size(px(12.)).child("Try another search or choose a different filter.")),
+          .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).child(t("catalog.no_match")))
+          .child(div().text_size(px(12.)).child(t("catalog.no_match_hint"))),
       );
     }
 
@@ -169,13 +176,7 @@ impl Workspace {
       if members.is_empty() {
         continue;
       }
-      let description = match category {
-        ToolCategory::PackageManager => "The foundation for your developer tools",
-        ToolCategory::JavaScript => "Run, build, and ship for the web",
-        ToolCategory::Python => "From quick scripts to data science",
-        ToolCategory::Rust => "Build fast, dependable native applications",
-        ToolCategory::Ai => "A little more intelligence in your workflow",
-      };
+      let description = category.description();
       // Equal-width flex rows avoid running the grid sizing algorithm on every scroll frame.
       let mut cards = v_flex().gap_3();
       for pair in members.chunks(2) {
@@ -218,8 +219,8 @@ impl Workspace {
     let model = self.model.read(cx);
     let tag = status_tag(model, tool);
     let version = tool.installed_version().map(|v| format!("v{v}"));
-    let has_update = model.has_update(tool);
-    let can_update = has_update && model.can_manage(tool) && id != "npm" && !model.busy();
+    let has_update = model.can_update(tool);
+    let can_update = has_update && !model.busy();
 
     v_flex()
       .id(SharedString::from(format!("catalog-{id}")))
@@ -249,7 +250,7 @@ impl Workspace {
               .min_w_0()
               .gap_1()
               .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).child(tool.name))
-              .child(div().text_size(px(11.)).text_color(theme.muted_foreground).child(tool.subtitle)),
+              .child(div().text_size(px(11.)).text_color(theme.muted_foreground).child(tool.subtitle())),
           )
           .child(selection_checkbox(&self.model, tool, false, cx)),
       )
@@ -268,8 +269,8 @@ impl Workspace {
               Button::new(SharedString::from(format!("update-{id}")))
                 .primary()
                 .xsmall()
-                .label("Update")
-                .accessibility_label(format!("Update {}", tool.name))
+                .label(t("action.update"))
+                .accessibility_label(tf("action.update_accessibility", &[("name", tool.name)]))
                 .on_click(move |_, _, cx| update_model.update(cx, |model, cx| model.prepare(Some(BTreeSet::from([id.to_string()])), cx))),
             )
           })
@@ -277,20 +278,20 @@ impl Workspace {
             Button::new(SharedString::from(format!("details-{id}")))
               .ghost()
               .xsmall()
-              .label("Details")
+              .label(t("action.details"))
               .icon(IconName::ArrowRight)
-              .accessibility_label(format!("View {} details", tool.name))
+              .accessibility_label(tf("action.details_accessibility", &[("name", tool.name)]))
               .on_click(cx.listener(move |this, _, _, cx| this.focus_tool(id, cx))),
           ),
       )
   }
 
   /// A clickable summary figure that filters the catalog.
-  fn stat_tile(&self, label: &'static str, value: String, color: Hsla, filter: CatalogFilter, cx: &mut Context<Self>) -> impl IntoElement {
+  fn stat_tile(&self, label_key: &'static str, value: String, color: Hsla, filter: CatalogFilter, cx: &mut Context<Self>) -> impl IntoElement {
     let theme = cx.theme().clone();
     let active = self.catalog_filter == filter;
     v_flex()
-      .id(SharedString::from(format!("stat-{label}")))
+      .id(SharedString::from(format!("stat-{label_key}")))
       .flex_1()
       .gap(px(4.))
       .px_4()
@@ -306,6 +307,6 @@ impl Workspace {
         cx.notify();
       }))
       .child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).text_color(color).child(value))
-      .child(caption(label, cx))
+      .child(caption(t(label_key), cx))
   }
 }

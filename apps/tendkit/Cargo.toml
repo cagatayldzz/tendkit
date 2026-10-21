@@ -10,12 +10,13 @@ default-run = "TendKit"
 
 [package.metadata.layers]
 # Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["tendkit-ui", "tendkit-model", "tendkit-storage", "gpui-kit"]
+dependencies = ["tendkit-i18n", "tendkit-ui", "tendkit-model", "tendkit-storage", "gpui-kit"]
 
 [lints]
 workspace = true
 
 [dependencies]
+tendkit-i18n.workspace = true
 tendkit-ui.workspace = true
 tendkit-model.workspace = true
 tendkit-storage.workspace = true
