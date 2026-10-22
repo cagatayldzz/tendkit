@@ -153,15 +153,17 @@ impl Workspace {
     let about = SettingPage::new(t("settings.about")).icon(IconName::Info).group(SettingGroup::new().title("TendKit").item(SettingItem::render(
       move |_, _, cx| {
         let last_scan = about_model.read(cx).last_scan.map(platform::local_time).unwrap_or_else(|| "—".into());
-        DescriptionList::new()
-          .columns(1)
-          .bordered(false)
-          .item(t("about.version"), APP_VERSION, 1)
-          .item(t("about.channel"), platform::channel_label(), 1)
-          .item(t("about.architecture"), platform::architecture(), 1)
-          .item(platform::os_name(), platform::os_version(), 1)
-          .item(t("about.last_scan"), last_scan, 1)
-          .item(t("detail.source"), tendkit_updater::repository_slug().unwrap_or("—"), 1)
+        div().w_full().text_sm().child(
+          DescriptionList::new()
+            .columns(1)
+            .bordered(false)
+            .item(t("about.version"), APP_VERSION, 1)
+            .item(t("about.channel"), platform::channel_label(), 1)
+            .item(t("about.architecture"), platform::architecture(), 1)
+            .item(platform::os_name(), platform::os_version(), 1)
+            .item(t("about.last_scan"), last_scan, 1)
+            .item(t("detail.source"), tendkit_updater::repository_slug().unwrap_or("—"), 1),
+        )
       },
     )));
 

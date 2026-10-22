@@ -120,27 +120,35 @@ impl Workspace {
     };
 
     v_flex().w(px(260.)).flex_none().h_full().bg(theme.sidebar.opacity(0.5)).border_r_1().border_color(theme.border).child(list).child(
-      h_flex()
-        .gap(px(6.))
+      v_flex()
+        .w_full()
+        .flex_none()
+        .gap_2()
         .p(px(14.))
         .border_t_1()
         .border_color(theme.border)
         .text_size(px(11.))
         .text_color(theme.muted_foreground)
-        .child(if scanning { Icon::new(IconName::RefreshCw) } else { Icon::new(Lucide::ShieldCheck) }.size(px(12.)))
-        .child(if scanning {
-          tf("list.scanned", &[("scanned", &scanned.to_string()), ("total", &total.to_string())])
-        } else if updating {
-          tf("list.to_update", &[("count", &updatable.to_string())])
-        } else {
-          tf("statusbar.installed_count", &[("installed", &installed.to_string()), ("total", &total.to_string())])
-        })
-        .child(div().flex_1())
+        .child(
+          h_flex()
+            .w_full()
+            .gap(px(6.))
+            .child(div().flex_none().child(if scanning { Icon::new(IconName::RefreshCw) } else { Icon::new(Lucide::ShieldCheck) }.size(px(12.))))
+            .child(div().flex_1().min_w_0().child(if scanning {
+              tf("list.scanned", &[("scanned", &scanned.to_string()), ("total", &total.to_string())])
+            } else if updating {
+              tf("list.to_update", &[("count", &updatable.to_string())])
+            } else {
+              tf("statusbar.installed_count", &[("installed", &installed.to_string()), ("total", &total.to_string())])
+            })),
+        )
         .when(updatable > 0, |this| {
           this.child(
             Button::new("update-all-list")
               .primary()
-              .xsmall()
+              .small()
+              .w_full()
+              .flex_none()
               .label(t("action.update_all"))
               .disabled(busy)
               .on_click(cx.listener(|this, _, _, cx| this.model.update(cx, |model, cx| model.update_all(cx)))),
