@@ -94,3 +94,8 @@ test discovery and declare any integration targets explicitly. Packages with onl
 integration tests can use Cargo's default discovery. Production APIs stay private.
 `bun run check:test-layout` checks source placement, descriptive names, and test
 registration for both `apps/` and `crates/`; it runs in the full check and CI.
+
+Developer builds (`debug_assertions`) disable application self-updates through
+`model::APP_UPDATES_ENABLED`: startup checks, download and restart actions,
+settings update pages, status badges, and notifications share that policy.
+Tool version checks and tool updates remain available in every build.

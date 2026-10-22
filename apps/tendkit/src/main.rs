@@ -78,7 +78,7 @@ fn main() {
     .detach();
     model.update(cx, |model, cx| {
       model.scan(cx);
-      if model.settings.check_app_updates {
+      if tendkit_model::APP_UPDATES_ENABLED && model.settings.check_app_updates {
         model.check_app_update(cx);
       }
     });

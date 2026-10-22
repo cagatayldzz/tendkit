@@ -5,7 +5,7 @@ use gpui_kit::{
   *,
 };
 use tendkit_i18n::{t, tf};
-use tendkit_model::AppUpdate;
+use tendkit_model::{AppUpdate, APP_UPDATES_ENABLED};
 
 impl Workspace {
   /// The bottom bar: what the app is doing, and the app update state.
@@ -34,12 +34,14 @@ impl Workspace {
         }
       })
       .when(updates > 0 && idle, |bar| bar.left(div().text_color(orange()).child(tf("statusbar.tool_updates", &[("count", &updates.to_string())]))))
-      .right(match app_update {
-        AppUpdate::Available(release) => {
-          Self::update_tag(Tag::warning().small().child(tf("statusbar.app_available", &[("version", &release.version)])), cx)
-        }
-        AppUpdate::Ready(_) => Self::update_tag(Tag::success().small().child(t("statusbar.restart")), cx),
-        _ => div().into_any_element(),
+      .when(APP_UPDATES_ENABLED, |bar| {
+        bar.right(match app_update {
+          AppUpdate::Available(release) => {
+            Self::update_tag(Tag::warning().small().child(tf("statusbar.app_available", &[("version", &release.version)])), cx)
+          }
+          AppUpdate::Ready(_) => Self::update_tag(Tag::success().small().child(t("statusbar.restart")), cx),
+          _ => div().into_any_element(),
+        })
       })
       .when(self.destination != Destination::Settings, |bar| bar.right(div().child(crate::platform::channel_label())))
   }

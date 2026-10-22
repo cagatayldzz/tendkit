@@ -3,7 +3,7 @@
 
 mod app_update;
 
-pub use app_update::{AppUpdate, APP_VERSION};
+pub use app_update::{AppUpdate, APP_UPDATES_ENABLED, APP_VERSION};
 
 use futures::{channel::mpsc, StreamExt};
 use gpui_kit::*;

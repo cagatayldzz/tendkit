@@ -26,7 +26,7 @@ use gpui_kit::{
 };
 use std::time::SystemTime;
 use tendkit_i18n::{t, tf};
-use tendkit_model::{AppModel, AppUpdate};
+use tendkit_model::{AppModel, AppUpdate, APP_UPDATES_ENABLED};
 
 pub use assets::Assets;
 
@@ -165,6 +165,9 @@ impl Workspace {
 
   /// Shows a notification once for each newly found TendKit release.
   fn announce_app_update(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    if !APP_UPDATES_ENABLED {
+      return;
+    }
     let AppUpdate::Available(release) = self.model.read(cx).app_update.clone() else { return };
     if self.notified_update.as_deref() == Some(release.version.as_str()) {
       return;

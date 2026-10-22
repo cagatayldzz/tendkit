@@ -11,6 +11,9 @@ use tendkit_updater::{Release, Stage};
 /// The version of the running application.
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Developer builds never check for or install published application releases.
+pub const APP_UPDATES_ENABLED: bool = !cfg!(debug_assertions);
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AppUpdate {
   Idle,
@@ -38,7 +41,7 @@ enum Message<T> {
 impl AppModel {
   /// Looks for a newer TendKit release.
   pub fn check_app_update(&mut self, cx: &mut Context<Self>) {
-    if self.app_update.is_working() || matches!(self.app_update, AppUpdate::Ready(_)) {
+    if !APP_UPDATES_ENABLED || self.app_update.is_working() || matches!(self.app_update, AppUpdate::Ready(_)) {
       return;
     }
     self.app_update = AppUpdate::Checking;
@@ -60,6 +63,9 @@ impl AppModel {
 
   /// Downloads and verifies the available release.
   pub fn download_app_update(&mut self, cx: &mut Context<Self>) {
+    if !APP_UPDATES_ENABLED {
+      return;
+    }
     let release = match &self.app_update {
       AppUpdate::Available(release) => release.clone(),
       AppUpdate::Failed(_) => match &self.last_release {
@@ -97,6 +103,9 @@ impl AppModel {
 
   /// Quits and lets the installer swap in the verified update.
   pub fn restart_to_update(&mut self, cx: &mut Context<Self>) {
+    if !APP_UPDATES_ENABLED {
+      return;
+    }
     if self.is_executing {
       self.app_update = AppUpdate::Failed(tendkit_i18n::t("err.restart_busy"));
       cx.notify();

@@ -16,7 +16,7 @@ use gpui_kit::{
 };
 use gpui_kit_assets::IconName as Lucide;
 use tendkit_i18n::{system_language, t, tf, Language};
-use tendkit_model::{AppModel, AppUpdate, APP_VERSION};
+use tendkit_model::{AppModel, AppUpdate, APP_UPDATES_ENABLED, APP_VERSION};
 use tendkit_updater::Stage;
 
 pub(crate) const PAGE_UPDATES: usize = 1;
@@ -165,11 +165,18 @@ impl Workspace {
       },
     )));
 
+    let mut pages = vec![general];
+    if APP_UPDATES_ENABLED {
+      pages.push(updates);
+    }
+    pages.push(about);
+    let selected_page = self.settings_page.min(pages.len() - 1);
+
     div().id("settings").size_full().child(
       Settings::new(SharedString::from(format!("settings-{}", self.settings_epoch)))
         .sidebar_width(px(190.))
-        .default_selected_index(gpui_kit::component::setting::SelectIndex { page_ix: self.settings_page, group_ix: None })
-        .pages([general, updates, about]),
+        .default_selected_index(gpui_kit::component::setting::SelectIndex { page_ix: selected_page, group_ix: None })
+        .pages(pages),
     )
   }
 }
