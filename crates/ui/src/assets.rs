@@ -5,7 +5,26 @@ use std::borrow::Cow;
 // these SVGs are embedded, not the whole catalog.
 gpui_kit_assets::icon_assets!(
   AppIcons,
-  [Boxes, CircleArrowDown, Circle, GitBranch, Hexagon, Layers, Link, Package, ShieldCheck, SlidersHorizontal, Terminal, Wrench, X, Zap]
+  [
+    Boxes,
+    CircleArrowDown,
+    Circle,
+    GitBranch,
+    Hexagon,
+    Layers,
+    Link,
+    Package,
+    ShieldCheck,
+    SlidersHorizontal,
+    Stethoscope,
+    CircleMinus,
+    Copy,
+    TriangleAlert,
+    Terminal,
+    Wrench,
+    X,
+    Zap
+  ]
 );
 
 pub struct Assets;
@@ -26,3 +45,7 @@ impl AssetSource for Assets {
     Ok(paths)
   }
 }
+
+#[cfg(test)]
+#[path = "../tests/assets.rs"]
+mod tests;

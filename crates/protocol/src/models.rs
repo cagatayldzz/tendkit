@@ -139,6 +139,8 @@ pub struct EventData {
   pub id: Option<String>,
   pub installations: Option<Vec<Installation>>,
   pub manageable: Option<bool>,
+  /// PATH inherited by the engine, before adding discovery directories.
+  pub path_entries: Option<Vec<String>>,
   pub engine_version: Option<String>,
   pub latest_version: Option<String>,
   pub status: Option<String>,

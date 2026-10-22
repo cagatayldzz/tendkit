@@ -97,10 +97,12 @@ pub fn manageable(id: &str, state: &Snapshot) -> bool {
 }
 
 pub fn emit_tools(state: &Snapshot, sink: &mut Sink) -> Result<(), String> {
+  let path_entries: Vec<String> =
+    env::var_os("PATH").map(|value| env::split_paths(&value).map(|path| path.to_string_lossy().into_owned()).collect()).unwrap_or_default();
   for tool in TOOLS {
     sink(
       "tool_detected",
-      json!({"id": tool.id, "installations": state.get(tool.id).cloned().unwrap_or_default(), "manageable": manageable(tool.id, state)}),
+      json!({"id": tool.id, "installations": state.get(tool.id).cloned().unwrap_or_default(), "manageable": manageable(tool.id, state), "path_entries": path_entries}),
     )?;
   }
   Ok(())

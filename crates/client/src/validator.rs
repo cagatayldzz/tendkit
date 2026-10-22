@@ -12,6 +12,7 @@ pub struct EventValidator {
   planned: bool,
   received_latest: bool,
   tools: HashSet<String>,
+  path_context: Option<Option<Vec<String>>>,
   completed: bool,
 }
 
@@ -27,6 +28,7 @@ impl EventValidator {
       planned: false,
       received_latest: false,
       tools: HashSet::new(),
+      path_context: None,
       completed: false,
     }
   }
@@ -72,6 +74,8 @@ impl EventValidator {
       }
       EventType::ToolDetected => {
         ensure(self.greeted && matches!(self.command.as_str(), "scan" | "execute") && known(&data.id) && data.installations.is_some())?;
+        ensure(self.path_context.as_ref().is_none_or(|context| context == &data.path_entries))?;
+        self.path_context = Some(data.path_entries.clone());
         ensure(self.tools.insert(data.id.clone().unwrap_or_default()))?;
       }
       EventType::StepStarted | EventType::StepFinished | EventType::ExternalActionRequired => {

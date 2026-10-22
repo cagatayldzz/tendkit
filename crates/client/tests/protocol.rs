@@ -112,7 +112,7 @@ fn actual_rust_engine_completes_scan() {
   let mut expected: Vec<_> = TOOL_IDS.iter().map(|s| s.to_string()).collect();
   expected.sort();
   assert_eq!(ids, expected);
-  assert!(events.iter().filter(|e| e.kind == EventType::ToolDetected).all(|e| e.data.manageable.is_some()));
+  assert!(events.iter().filter(|e| e.kind == EventType::ToolDetected).all(|e| e.data.manageable.is_some() && e.data.path_entries.is_some()));
 }
 
 fn fixture_plan() -> InstallPlan {
@@ -240,4 +240,12 @@ fn actual_rust_executor_accepts_current_plan_and_rejects_stale_plan() {
   let _ = fs::remove_dir_all(&root);
   let message = stale.expect_err("Stale plan was accepted").to_string();
   assert!(message.contains("environment changed"), "{message}");
+}
+
+#[test]
+fn one_scan_cannot_change_its_inherited_path_context() {
+  let mut validator = EventValidator::new("scan", "doctor", None, vec![]);
+  validator.accept(&event("doctor", 1, "hello", "{}")).unwrap();
+  validator.accept(&event("doctor", 2, "tool_detected", r#"{"id":"node","installations":[],"path_entries":["/a"]}"#)).unwrap();
+  assert!(validator.accept(&event("doctor", 3, "tool_detected", r#"{"id":"bun","installations":[],"path_entries":["/b"]}"#)).is_err());
 }

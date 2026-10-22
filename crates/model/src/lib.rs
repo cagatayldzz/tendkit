@@ -2,8 +2,10 @@
 //! by engine events and observed by the interface.
 
 mod app_update;
+mod doctor;
 
 pub use app_update::{AppUpdate, APP_UPDATES_ENABLED, APP_VERSION};
+pub use doctor::{DoctorCheck, DoctorFinding, DoctorInstallation, DoctorReport, DoctorSeverity};
 
 use futures::{channel::mpsc, StreamExt};
 use gpui_kit::*;
@@ -145,6 +147,8 @@ pub struct AppModel {
   pub is_scanning: bool,
   pub error: Option<String>,
   pub last_scan: Option<SystemTime>,
+  pub scan_path_entries: Option<Vec<String>>,
+  pub scan_complete: bool,
   pub log: Vec<String>,
   pub engine_version: Option<String>,
   pub latest_versions: HashMap<String, String>,
@@ -215,6 +219,8 @@ impl AppModel {
       is_scanning: false,
       error: None,
       last_scan: None,
+      scan_path_entries: None,
+      scan_complete: false,
       log: Vec::new(),
       engine_version: None,
       latest_versions: HashMap::new(),
@@ -473,6 +479,15 @@ impl AppModel {
   }
 
   pub fn scan(&mut self, cx: &mut Context<Self>) {
+    self.scan_with_latest(true, cx);
+  }
+
+  /// Doctor refreshes only local evidence and never queries release metadata.
+  pub fn scan_doctor(&mut self, cx: &mut Context<Self>) {
+    self.scan_with_latest(false, cx);
+  }
+
+  fn scan_with_latest(&mut self, check_latest: bool, cx: &mut Context<Self>) {
     if self.busy() {
       return;
     }
@@ -482,6 +497,8 @@ impl AppModel {
     self.results.clear();
     self.plan = None;
     self.log = vec!["Local tool scan started.".into()];
+    self.scan_path_entries = None;
+    self.scan_complete = false;
     for tool in &mut self.tools {
       tool.scanned = false;
       tool.installations.clear();
@@ -493,12 +510,15 @@ impl AppModel {
       Request::new("scan"),
       cx,
       |model, event, _| model.receive(event, Operation::Scan),
-      |model, result, cx| {
+      move |model, result, cx| {
         model.is_scanning = false;
         match result {
           Ok(()) => {
             model.last_scan = Some(SystemTime::now());
-            model.check_all_latest(false, cx);
+            model.scan_complete = true;
+            if check_latest {
+              model.check_all_latest(false, cx);
+            }
           }
           Err(error) => {
             model.error = Some(failure_text(&error));
@@ -555,6 +575,7 @@ impl AppModel {
     let Some(plan) = self.plan.clone() else { return };
     self.show_plan = false;
     self.is_executing = true;
+    self.scan_complete = false;
     self.is_cancelling = false;
     self.error = None;
     self.results.clear();
@@ -579,6 +600,7 @@ impl AppModel {
         match result {
           Ok(()) => {
             model.last_scan = Some(SystemTime::now());
+            model.scan_complete = true;
             if model.run_status == Some(RunStatus::Succeeded) {
               model.selected.clear();
             }
@@ -697,6 +719,9 @@ impl AppModel {
         }
       }
       EventType::ToolDetected => {
+        if let Some(entries) = data.path_entries {
+          self.scan_path_entries = Some(entries);
+        }
         let Some(index) = self.tools.iter().position(|t| Some(t.id) == data.id.as_deref()) else { return };
         let tool = &mut self.tools[index];
         tool.installations = data.installations.unwrap_or_default();

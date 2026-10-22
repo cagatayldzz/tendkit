@@ -4,6 +4,7 @@
 mod assets;
 mod catalog;
 mod components;
+mod doctor;
 mod opencommit;
 mod plan;
 mod platform;
@@ -62,17 +63,19 @@ pub enum Destination {
   AllTools,
   Installed,
   Updates,
+  Doctor,
   Settings,
 }
 
 impl Destination {
-  pub const ALL: [Self; 4] = [Self::AllTools, Self::Installed, Self::Updates, Self::Settings];
+  pub const ALL: [Self; 5] = [Self::AllTools, Self::Installed, Self::Updates, Self::Doctor, Self::Settings];
 
   pub fn title(self) -> String {
     t(match self {
       Self::AllTools => "nav.all_tools",
       Self::Installed => "nav.installed",
       Self::Updates => "nav.updates",
+      Self::Doctor => "nav.doctor",
       Self::Settings => "nav.settings",
     })
   }
@@ -80,6 +83,7 @@ impl Destination {
   pub fn includes(self, tool: &tendkit_model::ToolRow, model: &AppModel) -> bool {
     match self {
       Self::AllTools | Self::Settings => true,
+      Self::Doctor => false,
       Self::Installed => tool.installed_version().is_some(),
       Self::Updates => model.can_update(tool),
     }
@@ -97,6 +101,7 @@ pub struct Workspace {
   /// Bumped to reopen the settings on a chosen page, since the component keeps its own selection.
   settings_epoch: u64,
   settings_page: usize,
+  doctor_expanded: std::collections::HashSet<&'static str>,
   /// The release the user was last notified about, so each one is announced once.
   notified_update: Option<String>,
   focus_handle: FocusHandle,
@@ -134,6 +139,7 @@ impl Workspace {
       latest_request: None,
       settings_epoch: 0,
       settings_page: 0,
+      doctor_expanded: std::collections::HashSet::new(),
       notified_update: None,
       focus_handle,
       _subscriptions: subscriptions,
@@ -199,7 +205,7 @@ impl Workspace {
 
   fn move_selection(&mut self, offset: isize, cx: &mut Context<Self>) {
     let ids: Vec<_> = self.visible_tools(cx).iter().map(|t| t.id).collect();
-    if ids.is_empty() || self.destination == Destination::Settings {
+    if ids.is_empty() || matches!(self.destination, Destination::Settings | Destination::Doctor) {
       return;
     }
     let index = self.focused_tool.and_then(|id| ids.iter().position(|i| *i == id));
@@ -230,6 +236,7 @@ impl Workspace {
     let theme = cx.theme().clone();
     let subtitle = match self.destination {
       Destination::Settings => t("toolbar.preferences"),
+      Destination::Doctor => t("doctor.subtitle"),
       Destination::Updates => tf("toolbar.updates_available", &[("count", &self.visible_tools(cx).len().to_string())]),
       _ => tf("toolbar.tools_count", &[("count", &self.visible_tools(cx).len().to_string())]),
     };
@@ -254,7 +261,7 @@ impl Workspace {
             .child(div().text_size(px(11.)).line_height(px(13.)).text_color(theme.muted_foreground).child(subtitle)),
         )
         .child(div().flex_1())
-        .when(self.destination != Destination::Settings, |this| {
+        .when(!matches!(self.destination, Destination::Settings | Destination::Doctor), |this| {
           this
             .child(div().w(px(220.)).child(Input::new(&self.search).small().prefix(component::Icon::new(IconName::Search).small()).cleanable(true)))
             .child(
@@ -277,6 +284,8 @@ impl Render for Workspace {
     let theme = cx.theme().clone();
     let content = if self.destination == Destination::Settings {
       self.render_settings(cx).into_any_element()
+    } else if self.destination == Destination::Doctor {
+      self.render_doctor(cx).into_any_element()
     } else if self.destination == Destination::AllTools {
       self.render_catalog(window, cx).into_any_element()
     } else {

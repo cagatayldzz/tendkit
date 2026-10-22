@@ -93,3 +93,14 @@ external operation is cancelled while Installer might still be reading it.
 An `error` event terminates an operation without `run_finished`. Partial results
 must not be presented as an overall success. UI log buffers and child-process
 output capture are bounded.
+
+## Doctor scan context
+
+`tool_detected.data.path_entries` is an optional array of PATH directory strings,
+including empty or relative entries, inherited by the engine before adding known
+installation directories for discovery. New engines emit the same array for
+every tool in a scan or final execution snapshot. The client rejects a response
+that changes this context between tools. Omission remains supported for older
+engines; Doctor then reports unknown PATH context. Installation ordering and the
+existing scan event count are unchanged. Relative entries are not scanned and
+are reported separately by Doctor.

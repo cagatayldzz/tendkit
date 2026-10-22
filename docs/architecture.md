@@ -99,3 +99,29 @@ Developer builds (`debug_assertions`) disable application self-updates through
 `model::APP_UPDATES_ENABLED`: startup checks, download and restart actions,
 settings update pages, status badges, and notifications share that policy.
 Tool version checks and tool updates remain available in every build.
+
+## TendKit Doctor
+
+Doctor is a read-only view of local scan evidence, with pure diagnostic rules in
+`model::doctor` and GPUI Kit cards in `ui::doctor`. It reuses the engine scan and
+adds no application-to-engine crate dependencies. Each `tool_detected` event
+includes optional `path_entries`: the engine's inherited PATH, before discovery
+adds known manager directories. The client checks that the context stays the
+same throughout a response. Older engines without this field are shown as
+having unknown PATH context, rather than as failing PATH checks.
+
+The report distinguishes competing command names on PATH from installations
+found only in known directories, version differences, and failed version probes.
+PATH precedence uses the original directory order and never skips a broken first
+binary to label a later one active. Canonical symlink duplicates remain collapsed
+by detection. Missing optional tools are not health failures. No synthetic health
+score or remote latest-version comparison is used. A report becomes complete
+only after the engine response finishes successfully; partial or failed scans
+cannot present passing results.
+
+Doctor's Run Checks action starts a local scan without release lookups. The view
+shows installation sources, versions, paths, explanations, and static diagnostic
+commands that the user may copy into a terminal. It never runs repair commands,
+installs tools, edits shell files, or deletes binaries. The scope text explains
+that Finder's inherited PATH may differ from a terminal; aliases, functions,
+relative PATH directories, and project-specific manager overrides are not resolved.
