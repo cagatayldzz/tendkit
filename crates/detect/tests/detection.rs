@@ -1,4 +1,5 @@
 use super::*;
+
 #[test]
 fn parses_actual_cli_formats() {
   for (raw, expected) in [
@@ -14,6 +15,7 @@ fn parses_actual_cli_formats() {
   assert_eq!(parse_version("command not found"), None);
   assert_eq!(parse_version("1.2"), None);
 }
+
 #[test]
 fn detects_rustup_hard_link_proxies_in_custom_cargo_home() {
   let root = env::temp_dir().join(format!("tendkit-rustup-{}", std::process::id()));
@@ -29,6 +31,7 @@ fn detects_rustup_hard_link_proxies_in_custom_cargo_home() {
   assert_eq!(installations[0].version.as_deref(), Some("1.90.0"));
   fs::remove_dir_all(root).unwrap();
 }
+
 #[test]
 fn recognizes_python_installation_sources() {
   assert_eq!(source(Path::new("/usr/bin/python3")), "System");
@@ -36,6 +39,7 @@ fn recognizes_python_installation_sources() {
   assert_eq!(source(Path::new("/Library/Frameworks/Python.framework/Versions/3.14/bin/python3")), "Python.org");
   assert_eq!(source(Path::new("/fixture/Cellar/python@3.14/3.14.0/bin/python3")), "Homebrew");
 }
+
 #[test]
 fn detects_symlinks_once_and_preserves_unreadable_versions() {
   let root = env::temp_dir().join(format!("tendkit-test-{}", std::process::id()));
@@ -56,6 +60,7 @@ fn detects_symlinks_once_and_preserves_unreadable_versions() {
   assert!(broken[0].error.is_some());
   fs::remove_dir_all(root).unwrap();
 }
+
 #[test]
 fn probes_run_concurrently_and_keep_search_order() {
   let root = env::temp_dir().join(format!("tendkit-parallel-{}", std::process::id()));
@@ -74,6 +79,7 @@ fn probes_run_concurrently_and_keep_search_order() {
   assert_eq!(detected.iter().map(|i| i.version.as_deref().unwrap()).collect::<Vec<_>>(), ["1.0.0", "1.0.1", "1.0.2"]);
   fs::remove_dir_all(root).unwrap();
 }
+
 #[test]
 fn hanging_probe_times_out() {
   let root = env::temp_dir().join(format!("tendkit-timeout-{}", std::process::id()));

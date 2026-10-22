@@ -1,4 +1,5 @@
 use super::*;
+
 #[test]
 fn block_is_idempotent_and_keeps_user_content() {
   let paths = vec!["/Users/test user's/.bun/bin".into(), "/opt/homebrew/bin".into()];
@@ -11,12 +12,14 @@ fn block_is_idempotent_and_keeps_user_content() {
   assert!(updated.starts_with(original));
   assert_eq!(updated.matches(BEGIN).count(), 1);
 }
+
 #[test]
 fn malformed_blocks_are_rejected() {
   assert!(render(BEGIN, &[]).is_err());
   assert!(render(&format!("{END}\n{BEGIN}"), &[]).is_err());
   assert!(render(&format!("{BEGIN}\n{BEGIN}\n{END}"), &[]).is_err());
 }
+
 #[test]
 fn writes_backup_and_refuses_symlinks() {
   let dir = std::env::temp_dir().join(format!("tendkit-shell-{}", std::process::id()));
@@ -35,6 +38,7 @@ fn writes_backup_and_refuses_symlinks() {
   assert!(update(&link, &[], &backups).is_err());
   fs::remove_dir_all(dir).unwrap();
 }
+
 #[test]
 fn sourcing_twice_preserves_priority_without_expanding_path_text() {
   let dir = std::env::temp_dir().join(format!("tendkit-shell-eval-{}", std::process::id()));

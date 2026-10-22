@@ -30,4 +30,5 @@ impl fmt::Display for UpdateError {
 impl std::error::Error for UpdateError {}
 
 #[cfg(test)]
+#[path = "../tests/updates.rs"]
 mod tests;

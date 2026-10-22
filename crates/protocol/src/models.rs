@@ -155,6 +155,7 @@ impl EventData {
   pub fn step_status(&self) -> Option<StepStatus> {
     self.status.as_deref().and_then(|s| serde_json::from_value(s.into()).ok())
   }
+
   pub fn run_status(&self) -> Option<RunStatus> {
     self.status.as_deref().and_then(|s| serde_json::from_value(s.into()).ok())
   }

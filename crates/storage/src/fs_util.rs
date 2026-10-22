@@ -17,6 +17,7 @@ pub fn write_atomic(path: &Path, data: &[u8], mode: u32) -> io::Result<()> {
       file.write_all(data)?;
       file.sync_all()?;
     }
+
     #[cfg(not(unix))]
     {
       let _ = mode;

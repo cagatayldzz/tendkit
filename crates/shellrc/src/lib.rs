@@ -92,4 +92,5 @@ pub fn update(file: &Path, paths: &[String], backups: &Path) -> Result<bool, Str
 }
 
 #[cfg(test)]
+#[path = "../tests/configuration.rs"]
 mod tests;

@@ -197,15 +197,20 @@ impl Workspace {
     let id = tool.id;
     if model.checking_latest.contains(id) {
       h_flex().gap_2().child(Spinner::new().xsmall()).child(div().text_color(theme.muted_foreground).child(t("status.checking")))
-    } else if let Some(error) = model.latest_version_errors.get(id) {
+    } else if model.latest_is_stale(id) {
+      let error = model.latest_version_errors.get(id).cloned().unwrap_or_else(|| t("detail.cache_expired"));
       let retry_model = self.model.clone();
-      h_flex().gap_2().child(div().text_color(theme.muted_foreground).child(t("detail.unavailable"))).child(
+      let label = match (model.latest_versions.get(id), model.latest_checked_at(id)) {
+        (Some(version), Some(at)) => tf("detail.stale", &[("version", version), ("time", &crate::platform::local_date_time(at))]),
+        _ => t("detail.unavailable"),
+      };
+      h_flex().gap_2().child(div().text_color(theme.muted_foreground).child(label)).child(
         Button::new("retry-latest")
           .ghost()
           .xsmall()
           .icon(IconName::RefreshCw)
           .accessibility_label(t("detail.retry"))
-          .tooltip(tf("detail.retry_tooltip", &[("error", error)]))
+          .tooltip(tf("detail.retry_tooltip", &[("error", &error)]))
           .on_click(move |_, _, cx| retry_model.update(cx, |model, cx| model.check_latest_version(id, true, cx))),
       )
     } else if let Some(version) = model.latest_versions.get(id) {

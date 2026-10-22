@@ -51,4 +51,5 @@ impl WindowSize {
 }
 
 #[cfg(test)]
+#[path = "../tests/window_size.rs"]
 mod tests;

@@ -214,4 +214,5 @@ pub fn primary<'a>(snapshot: &'a Snapshot, id: &str) -> Option<&'a Installation>
 }
 
 #[cfg(test)]
+#[path = "../tests/detection.rs"]
 mod tests;

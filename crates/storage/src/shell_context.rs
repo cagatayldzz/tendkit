@@ -26,6 +26,7 @@ const MAX_SIZE: u64 = 1_048_576;
 pub fn default_path() -> PathBuf {
   home_dir().join(".zshrc")
 }
+
 pub fn backups_path() -> PathBuf {
   support_dir().join("backups")
 }

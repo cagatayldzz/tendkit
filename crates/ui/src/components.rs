@@ -12,6 +12,7 @@ use tendkit_protocol::{StepAction, StepStatus};
 pub fn orange() -> Hsla {
   hsla(28. / 360., 0.92, 0.52, 1.)
 }
+
 pub fn green() -> Hsla {
   hsla(142. / 360., 0.62, 0.42, 1.)
 }

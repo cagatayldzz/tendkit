@@ -21,4 +21,5 @@ fn components(version: &str) -> Option<Vec<u64>> {
 }
 
 #[cfg(test)]
+#[path = "../tests/comparison.rs"]
 mod tests;

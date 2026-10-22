@@ -40,7 +40,9 @@ a new request. `hello` is also supported as a handshake-only request.
 The read-only `latest` command accepts exactly one tool ID in `selected`.
 It emits `hello`, optional `log` events, one `latest_version` event containing
 `id` and `latest_version`, then `run_finished`. Metadata uses the existing
-installation source and channel resolver. Homebrew and npm use their official
+installation source and channel resolver independently of management permission.
+Externally managed installations remain read-only but can check release versions.
+Homebrew and npm use their official
 release metadata directly. Errors produce an `error` event; no installation
 plan is created and no tools or shell files are changed.
 

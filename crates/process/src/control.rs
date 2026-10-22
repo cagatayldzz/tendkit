@@ -25,6 +25,7 @@ pub struct Control {
   pub cancelled: Arc<AtomicBool>,
   pub acknowledged: Arc<AtomicBool>,
 }
+
 impl Control {
   pub fn check(&self) -> Result<(), String> {
     if self.cancelled.load(Ordering::SeqCst) || TERMINATED.load(Ordering::SeqCst) {
@@ -33,6 +34,7 @@ impl Control {
       Ok(())
     }
   }
+
   pub fn listen(request_id: String) -> Self {
     let control = Self::default();
     let copy = control.clone();

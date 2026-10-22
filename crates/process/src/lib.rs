@@ -19,4 +19,5 @@ pub use network::{curl, get_json};
 pub type Sink<'a> = dyn FnMut(&str, serde_json::Value) -> Result<(), String> + 'a;
 
 #[cfg(test)]
+#[path = "../tests/commands.rs"]
 mod tests;

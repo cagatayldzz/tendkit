@@ -1,5 +1,8 @@
 [package]
 name = "tendkit-execute"
+
+# Register tests as unit modules so they can exercise private execution runners.
+autotests = false
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

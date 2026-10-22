@@ -1,6 +1,8 @@
 // The single-engine lock uses flock.
 #![allow(unsafe_code)]
 
+mod artifact;
+
 use serde_json::json;
 use std::{
   cell::Cell,
@@ -12,7 +14,7 @@ use std::{
     unix::fs::{DirBuilderExt, OpenOptionsExt},
   },
   path::{Path, PathBuf},
-  sync::atomic::Ordering,
+  sync::atomic::{AtomicU64, Ordering},
   thread,
   time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
@@ -26,11 +28,14 @@ struct WorkDir(PathBuf, Cell<bool>);
 impl WorkDir {
   fn new() -> Result<Self, String> {
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|e| e.to_string())?.as_nanos();
-    let path = env::temp_dir().join(format!("tendkit-{}-{stamp}", std::process::id()));
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let serial = NEXT.fetch_add(1, Ordering::Relaxed);
+    let path = env::temp_dir().join(format!("tendkit-{}-{stamp}-{serial}", std::process::id()));
     fs::DirBuilder::new().mode(0o700).create(&path).map_err(|e| e.to_string())?;
     Ok(Self(path, Cell::new(false)))
   }
 }
+
 impl Drop for WorkDir {
   fn drop(&mut self) {
     if !self.1.get() {
@@ -48,6 +53,11 @@ fn binary(state: &Snapshot, id: &str) -> Result<PathBuf, String> {
     .filter(|i| i.version.is_some())
     .map(|i| PathBuf::from(&i.path))
     .ok_or_else(|| format!("{id} was not found or could not be verified"))
+}
+
+fn valid_homebrew_signature(signature: &str) -> bool {
+  signature.contains("signed by a certificate trusted by")
+    && signature.lines().any(|line| line.trim() == "1. Developer ID Installer: Patrick Linnane (927JGANW46)")
 }
 
 fn install_homebrew(plan: &InstallPlan, work: &WorkDir, control: &Control, sink: &mut Sink) -> Result<(), String> {
@@ -79,7 +89,7 @@ fn install_homebrew(plan: &InstallPlan, work: &WorkDir, control: &Control, sink:
     Duration::from_secs(60),
     &[],
   )?;
-  if !signature.contains("Developer ID Installer:") || !signature.contains("signed by a certificate trusted by") {
+  if !valid_homebrew_signature(&signature) {
     return Err("Could not verify the Homebrew package signature".into());
   }
   sink("log", json!({"message": signature}))?;
@@ -103,11 +113,31 @@ fn install_homebrew(plan: &InstallPlan, work: &WorkDir, control: &Control, sink:
   Ok(())
 }
 
+fn homebrew_refresh_args(explicit: bool) -> Vec<String> {
+  if explicit {
+    vec!["update".into()]
+  } else {
+    vec!["update".into(), "--auto-update".into()]
+  }
+}
+
 fn run_step(step: &InstallStep, plan: &InstallPlan, work: &WorkDir, state: &Snapshot, control: &Control, sink: &mut Sink) -> Result<(), String> {
   let timeout = Duration::from_secs(1800);
   match &step.recipe {
     Recipe::Homebrew if step.before.is_none() => install_homebrew(plan, work, control, sink),
-    Recipe::Homebrew => command(&binary(state, "homebrew")?, &["update".into()], control, sink, true, timeout, &[]).map(|_| ()),
+    Recipe::Homebrew => {
+      let args = homebrew_refresh_args(plan.selected.iter().any(|id| id == "homebrew"));
+      command(
+        &binary(state, "homebrew")?,
+        &args,
+        control,
+        sink,
+        true,
+        timeout,
+        &[("HOMEBREW_NO_AUTO_UPDATE", ""), ("HOMEBREW_AUTO_UPDATE_SECS", "3600")],
+      )
+      .map(|_| ())
+    }
     Recipe::Brew { package, cask } => {
       let brew = binary(state, "homebrew")?;
       let info = command(
@@ -117,7 +147,7 @@ fn run_step(step: &InstallStep, plan: &InstallPlan, work: &WorkDir, state: &Snap
         sink,
         false,
         Duration::from_secs(120),
-        &[],
+        &[("HOMEBREW_NO_AUTO_UPDATE", "1")],
       )?;
       let info: serde_json::Value = serde_json::from_str(&info).map_err(|e| e.to_string())?;
       let available = if *cask { info["casks"][0]["version"].as_str() } else { info["formulae"][0]["versions"]["stable"].as_str() };
@@ -129,35 +159,16 @@ fn run_step(step: &InstallStep, plan: &InstallPlan, work: &WorkDir, state: &Snap
         args.push("--cask".into());
       }
       args.push(package.clone());
-      command(&brew, &args, control, sink, true, timeout, &[]).map(|_| ())
+      command(&brew, &args, control, sink, true, timeout, &[("HOMEBREW_NO_AUTO_UPDATE", "1")]).map(|_| ())
     }
     Recipe::Bun | Recipe::Codex | Recipe::Claude { .. } => {
-      let (url, shell, argument) = match &step.recipe {
-        Recipe::Bun => ("https://bun.com/install", "/bin/bash", format!("bun-v{}", step.target)),
-        Recipe::Codex => ("https://chatgpt.com/codex/install.sh", "/bin/sh", step.target.clone()),
-        _ => ("https://claude.ai/install.sh", "/bin/bash", step.target.clone()),
+      let destination = match step.recipe {
+        Recipe::Bun => home()?.join(".bun/bin/bun"),
+        _ => step.before.as_ref().map(|i| PathBuf::from(&i.path)).unwrap_or(home()?.join(".local/bin/codex")),
       };
-      let script = work.0.join(format!("{}-install.sh", step.id));
-      curl(url, Some(&script), control, sink)?;
-      let mut args = vec![script.to_string_lossy().into_owned()];
-      if matches!(step.recipe, Recipe::Codex) {
-        args.push("--release".into());
-      }
-      args.push(argument);
-      let bun_dir = home()?.join(".bun").to_string_lossy().into_owned();
-      let codex_dir = step
-        .before
-        .as_ref()
-        .and_then(|i| Path::new(&i.path).parent())
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or(home()?.join(".local/bin").to_string_lossy().into_owned());
-      let extra = match step.recipe {
-        Recipe::Bun => vec![("SHELL", "/bin/false"), ("BUN_INSTALL", bun_dir.as_str())],
-        Recipe::Codex => vec![("CODEX_NON_INTERACTIVE", "1"), ("CODEX_INSTALL_DIR", codex_dir.as_str())],
-        _ => Vec::new(),
-      };
-      command(Path::new(shell), &args, control, sink, true, timeout, &extra).map(|_| ())
+      artifact::install(step, &work.0, &destination, &mut artifact::SystemRunner { control, sink })
     }
+
     Recipe::Opencommit { manager } => {
       let args = if manager == "bun" {
         vec!["add".into(), "--global".into(), format!("opencommit@{}", step.target)]
@@ -182,7 +193,7 @@ pub fn execute(plan: InstallPlan, request_id: &str, sink: &mut Sink) -> Result<(
     return Err("Another TendKit installation is already running.".into());
   }
   let control = Control::listen(request_id.to_owned());
-  let mut state = snapshot();
+  let state = snapshot();
   let expected = build_plan(&plan.selected, plan.configure_shell, &state, plan.package.clone(), |id, _| {
     plan.steps.iter().find(|s| s.id == id).map(|s| s.target.clone()).ok_or("A plan step is missing".into())
   })?;
@@ -190,51 +201,7 @@ pub fn execute(plan: InstallPlan, request_id: &str, sink: &mut Sink) -> Result<(
     return Err("The installation environment changed. No operation was started. Create a new plan.".into());
   }
   let work = WorkDir::new()?;
-  let mut failed = BTreeSet::new();
-  let mut completed = 0;
-  for step in &plan.steps {
-    if control.check().is_err() {
-      break;
-    }
-    if step.dependencies.iter().any(|d| failed.contains(d)) {
-      failed.insert(step.id.clone());
-      sink("step_finished", json!({"id": step.id, "status": "blocked", "message": "A required dependency could not be installed"}))?;
-      completed += 1;
-      continue;
-    }
-    sink("step_started", json!({"id": step.id, "message": step.title}))?;
-    let result = if step.action.is_skip() { Ok(()) } else { run_step(step, &plan, &work, &state, &control, sink) };
-    if control.check().is_ok() {
-      state = snapshot();
-    }
-    let after = primary(&state, &step.id);
-    let verified = result.and_then(|_| {
-      let installed = after.and_then(|i| i.version.as_deref()).ok_or("Could not verify the installed version")?;
-      if step.id != "homebrew" && !current_enough(installed, &step.target) {
-        return Err(format!("Expected version {}, found {installed}. Check PATH and the package source.", step.target));
-      }
-      if step.id == "node" {
-        binary(&state, "npm")?;
-      }
-      Ok(())
-    });
-    let status = if verified.is_ok() {
-      if step.action.is_skip() {
-        "skipped"
-      } else {
-        "succeeded"
-      }
-    } else if control.check().is_err() {
-      "cancelled"
-    } else {
-      "failed"
-    };
-    if verified.is_err() {
-      failed.insert(step.id.clone());
-    }
-    sink("step_finished", json!({"id": step.id, "status": status, "before": step.before, "after": after, "message": verified.err()}))?;
-    completed += 1;
-  }
+  let (mut state, mut failed, completed) = execute_steps(&plan, state, &control, sink, &mut SystemSteps { plan: &plan, work: &work })?;
   if plan.configure_shell && control.check().is_ok() {
     sink("step_started", json!({"id": "shell", "message": "Terminal PATH settings"}))?;
     let blocked = !failed.is_empty();
@@ -265,6 +232,82 @@ pub fn execute(plan: InstallPlan, request_id: &str, sink: &mut Sink) -> Result<(
   sink("run_finished", json!({"status": status, "completed": completed}))
 }
 
+trait StepRunner {
+  fn snapshot(&mut self) -> Snapshot;
+
+  fn run(&mut self, step: &InstallStep, state: &Snapshot, control: &Control, sink: &mut Sink) -> Result<(), String>;
+}
+
+struct SystemSteps<'a> {
+  plan: &'a InstallPlan,
+  work: &'a WorkDir,
+}
+
+impl StepRunner for SystemSteps<'_> {
+  fn snapshot(&mut self) -> Snapshot {
+    snapshot()
+  }
+
+  fn run(&mut self, step: &InstallStep, state: &Snapshot, control: &Control, sink: &mut Sink) -> Result<(), String> {
+    run_step(step, self.plan, self.work, state, control, sink)
+  }
+}
+
+fn execute_steps(
+  plan: &InstallPlan,
+  mut state: Snapshot,
+  control: &Control,
+  sink: &mut Sink,
+  runner: &mut impl StepRunner,
+) -> Result<(Snapshot, BTreeSet<String>, usize), String> {
+  let mut failed = BTreeSet::new();
+  let mut completed = 0;
+  for step in &plan.steps {
+    if control.check().is_err() {
+      break;
+    }
+    if step.dependencies.iter().any(|d| failed.contains(d)) {
+      failed.insert(step.id.clone());
+      sink("step_finished", json!({"id": step.id, "status": "blocked", "message": "A required dependency could not be installed"}))?;
+      completed += 1;
+      continue;
+    }
+    sink("step_started", json!({"id": step.id, "message": step.title}))?;
+    let result = if step.action.is_skip() { Ok(()) } else { runner.run(step, &state, control, sink) };
+    if control.check().is_ok() {
+      state = runner.snapshot();
+    }
+    let after = primary(&state, &step.id);
+    let verified = result.and_then(|_| {
+      let installed = after.and_then(|i| i.version.as_deref()).ok_or("Could not verify the installed version")?;
+      if step.id != "homebrew" && !current_enough(installed, &step.target) {
+        return Err(format!("Expected version {}, found {installed}. Check PATH and the package source.", step.target));
+      }
+      if step.id == "node" {
+        binary(&state, "npm")?;
+      }
+      Ok(())
+    });
+    let status = if verified.is_ok() {
+      if step.action.is_skip() {
+        "skipped"
+      } else {
+        "succeeded"
+      }
+    } else if control.check().is_err() {
+      "cancelled"
+    } else {
+      "failed"
+    };
+    if verified.is_err() {
+      failed.insert(step.id.clone());
+    }
+    sink("step_finished", json!({"id": step.id, "status": status, "before": step.before, "after": after, "message": verified.err()}))?;
+    completed += 1;
+  }
+  Ok((state, failed, completed))
+}
+
 fn configure_shell(plan: &InstallPlan, state: &Snapshot, failed: &BTreeSet<String>, backups: &Path, sink: &mut Sink) -> Result<(), String> {
   let mut paths = Vec::new();
   // Preserve previously configured TendKit paths and add only verified tools.
@@ -293,3 +336,7 @@ fn configure_shell(plan: &InstallPlan, state: &Snapshot, failed: &BTreeSet<Strin
   }
   Ok(())
 }
+
+#[cfg(test)]
+#[path = "../tests/execution.rs"]
+mod tests;

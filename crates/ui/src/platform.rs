@@ -52,12 +52,23 @@ pub fn os_version() -> &'static str {
 
 /// A local wall-clock time such as "14:05".
 pub fn local_time(time: SystemTime) -> String {
+  format_local_time(time, false)
+}
+
+pub fn local_date_time(time: SystemTime) -> String {
+  format_local_time(time, true)
+}
+
+fn format_local_time(time: SystemTime, include_date: bool) -> String {
   let seconds = time.duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
   #[cfg(unix)]
   unsafe {
     let raw = seconds as libc::time_t;
     let mut parts: libc::tm = std::mem::zeroed();
     if !libc::localtime_r(&raw, &mut parts).is_null() {
+      if include_date {
+        return format!("{:04}-{:02}-{:02} {:02}:{:02}", parts.tm_year + 1900, parts.tm_mon + 1, parts.tm_mday, parts.tm_hour, parts.tm_min);
+      }
       return format!("{:02}:{:02}", parts.tm_hour, parts.tm_min);
     }
   }
@@ -105,4 +116,5 @@ pub fn language_name(code: &str) -> String {
 }
 
 #[cfg(test)]
+#[path = "../tests/platform.rs"]
 mod tests;

@@ -1,5 +1,8 @@
 [package]
 name = "tendkit-plan"
+
+# Register tests as unit modules so they can exercise private implementation details.
+autotests = false
 version.workspace = true
 edition.workspace = true
 publish.workspace = true

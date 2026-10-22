@@ -17,6 +17,14 @@ Use 2 spaces for indentation in all project-owned files, with LF line endings
 and a final newline. Keep EditorConfig, VS Code, and `rustfmt.toml` aligned with
 this rule. Run `cargo fmt --all` after Rust changes.
 
+In Rust files, leave one blank line after import groups and between functions,
+methods, structs, enums, traits, and implementations, including test helpers.
+Keep attributes and documentation comments attached to the item they describe.
+
+In TOML files, leave one blank line before a standalone comment block that
+follows key/value entries. Keep the comment attached to the setting it explains;
+comments immediately after a table header do not need an extra blank line.
+
 # Workspace layout
 
 The Cargo workspace has `apps/*` (executables) and `crates/*` (libraries). The
@@ -42,8 +50,29 @@ dependency direction is enforced by `bun run check:layers`:
 Build the interface with GPUI Kit (`gpui-kit`) and its Lucide icons. Update
 `docs/architecture.md` when the architecture changes.
 
+# Test layout
+
+Keep all Rust test implementations in the owning package's `tests/` directory
+(`crates/<crate>/tests/` or `apps/<app>/tests/`). Use descriptive file names such
+as `detection.rs`, `artifact.rs`, or `app_settings.rs`; do not use `tests.rs`,
+place test files under `src/`, or write inline test modules in production files.
+Leave one blank line after the import group and between top-level test items
+(functions, structs, and implementations). Keep attributes such as `#[test]`
+attached to the item immediately below them.
+
+For tests that need private implementation details, register the external file
+from its owning source module with `#[cfg(test)]` and
+`#[path = "../tests/<subject>.rs"] mod tests;`. Set `autotests = false` in
+`[package]` so Cargo does not also compile these files as integration tests.
+If that package also has integration tests, register each with an explicit
+`[[test]]` target. Packages containing only integration tests may keep Cargo's
+automatic discovery. Never expose production internals just to move test files.
+
+`bun run check:test-layout` enforces this layout and checks that test files are
+registered. Keep it enabled in `bun run check` and CI when adding packages or tests.
+
 # Checks
 
-Run `bun run check` before finishing a change (layers, script tests, formatting,
+Run `bun run check` before finishing a change (layers, test layout, script tests, formatting,
 clippy, and Rust tests). Tests never install or modify real tools. Commit or push
 only when the user asks.

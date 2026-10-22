@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "bash scripts/dev.sh",
     "build": "bash scripts/build-app.sh release",
-    "check": "bun run check:layers && bun test scripts && cargo fmt --all -- --check && cargo clippy --locked --workspace --all-targets -- -D warnings && bash scripts/test.sh",
+    "check": "bun run check:layers && bun run check:test-layout && bun test scripts && cargo fmt --all -- --check && cargo clippy --locked --workspace --all-targets -- -D warnings && bash scripts/test.sh",
     "check:layers": "bun scripts/layers.ts",
+    "check:test-layout": "bun scripts/test-layout.ts",
     "test": "bun test scripts && bash scripts/test.sh",
     "icons": "bash scripts/make-icns.sh",
     "commit": "git add -A && oco --yes",

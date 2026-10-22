@@ -28,6 +28,8 @@ jobs:
         run: bun test scripts
       - name: Check workspace layers
         run: bun scripts/layers.ts
+      - name: Check test layout
+        run: bun run check:test-layout
       - name: Check formatting
         run: cargo fmt --all -- --check
 

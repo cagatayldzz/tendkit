@@ -30,6 +30,7 @@ fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     path.metadata().map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0).unwrap_or(false)
   }
+
   #[cfg(not(unix))]
   {
     path.is_file()
@@ -48,14 +49,17 @@ impl Request {
   pub fn new(command: &str) -> Self {
     Self { command: command.into(), selected: Vec::new(), configure_shell: true, plan: None }
   }
+
   pub fn selected(mut self, selected: Vec<String>) -> Self {
     self.selected = selected;
     self
   }
+
   pub fn configure_shell(mut self, value: bool) -> Self {
     self.configure_shell = value;
     self
   }
+
   pub fn plan(mut self, plan: InstallPlan) -> Self {
     self.plan = Some(plan);
     self
@@ -234,6 +238,7 @@ fn terminate(pid: u32) {
   unsafe {
     libc::kill(pid as libc::pid_t, libc::SIGTERM);
   }
+
   #[cfg(not(unix))]
   let _ = pid;
 }

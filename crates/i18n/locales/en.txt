@@ -224,3 +224,6 @@ quit.title = An installation is in progress
 quit.detail = Quitting cancels the operation. Completed installations are preserved. Close any open macOS Installer window separately.
 quit.continue = Continue Operation
 quit.cancel = Cancel and Quit
+
+detail.stale = {version} (cached · last success: {time})
+detail.cache_expired = Cached version information has expired. Check again.

@@ -5,6 +5,7 @@ use std::{
   thread,
   time::{Duration, Instant},
 };
+
 #[test]
 fn executor_streams_and_cancels_owned_processes() {
   let control = Control::default();

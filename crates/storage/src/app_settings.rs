@@ -43,4 +43,5 @@ impl AppSettings {
 }
 
 #[cfg(test)]
+#[path = "../tests/app_settings.rs"]
 mod tests;

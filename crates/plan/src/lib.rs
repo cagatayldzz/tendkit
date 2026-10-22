@@ -309,6 +309,23 @@ pub fn prepare(selected: &[String], configure_shell: bool, sink: &mut Sink) -> R
   build_plan(selected, configure_shell, &state, package.clone(), |_, recipe| resolve(recipe, package.as_ref(), sink))
 }
 
+/// Version discovery is read-only, including installations owned by other managers.
+fn latest_recipe(id: &str, installed: Option<&Installation>, state: &Snapshot) -> Result<Recipe, String> {
+  if installed.is_some_and(|i| i.source == "Homebrew") {
+    return recipe(id, installed, state);
+  }
+  match id {
+    "node" => Ok(Recipe::Brew { package: "node".into(), cask: false }),
+    "python" => Ok(Recipe::Brew { package: "python3".into(), cask: false }),
+    "rust" => Ok(Recipe::Brew { package: "rust".into(), cask: false }),
+    "bun" => Ok(Recipe::Bun),
+    "codex" => Ok(Recipe::Codex),
+    "claude" => recipe(id, None, state),
+    "opencommit" => Ok(Recipe::Opencommit { manager: "bun".into() }),
+    _ => Err("Unknown version source".into()),
+  }
+}
+
 pub fn latest(selected: &[String], sink: &mut Sink) -> Result<(), String> {
   if selected.len() != 1 {
     return Err("Select exactly one tool to check its latest version.".into());
@@ -322,11 +339,7 @@ pub fn latest(selected: &[String], sink: &mut Sink) -> Result<(), String> {
       let dirs = search_dirs();
       let mut state = Snapshot::new();
       state.insert(id.clone(), detect(entry, &dirs));
-      if id == "opencommit" {
-        let npm = tool("npm").ok_or("npm tool definition is missing")?;
-        state.insert("npm".into(), detect(npm, &dirs));
-      }
-      let recipe = recipe(id, primary(&state, id), &state)?;
+      let recipe = latest_recipe(id, primary(&state, id), &state)?;
       resolve(&recipe, None, sink)?
     }
   };
@@ -338,4 +351,5 @@ pub fn latest(selected: &[String], sink: &mut Sink) -> Result<(), String> {
 }
 
 #[cfg(test)]
+#[path = "../tests/planning.rs"]
 mod tests;

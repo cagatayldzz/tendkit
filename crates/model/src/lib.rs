@@ -8,8 +8,10 @@ pub use app_update::{AppUpdate, APP_VERSION};
 use futures::{channel::mpsc, StreamExt};
 use gpui_kit::*;
 use std::{
-  collections::{BTreeSet, HashMap, HashSet},
+  cell::RefCell,
+  collections::{BTreeSet, HashMap, HashSet, VecDeque},
   path::PathBuf,
+  rc::Rc,
   sync::Arc,
   time::{Duration, SystemTime},
 };
@@ -171,6 +173,7 @@ pub struct AppModel {
   /// Failed lookups back off so a rate-limited endpoint is not retried on every tool selection.
   latest_failed_at: HashMap<String, SystemTime>,
   latest_generation: u64,
+  pending_latest: VecDeque<(String, bool)>,
   connection: Option<Arc<EngineConnection>>,
 }
 
@@ -238,6 +241,7 @@ impl AppModel {
       latest_cache: LatestVersionCache::load(LatestVersionCache::default_path()),
       latest_failed_at: HashMap::new(),
       latest_generation: 0,
+      pending_latest: VecDeque::new(),
       connection: None,
     }
   }
@@ -245,18 +249,23 @@ impl AppModel {
   pub fn busy(&self) -> bool {
     self.is_scanning || self.is_planning || self.is_executing
   }
+
   pub fn progress_total(&self) -> usize {
     self.plan.as_ref().map(|p| p.steps.len() + usize::from(p.configure_shell)).unwrap_or(0)
   }
+
   pub fn installed_count(&self) -> usize {
     self.tools.iter().filter(|t| t.installed_version().is_some()).count()
   }
+
   pub fn scanned_count(&self) -> usize {
     self.tools.iter().filter(|t| t.scanned).count()
   }
+
   pub fn tool(&self, id: &str) -> Option<&ToolRow> {
     self.tools.iter().find(|t| t.id == id)
   }
+
   pub fn can_manage(&self, tool: &ToolRow) -> bool {
     tool.scanned && tool.manageable
   }
@@ -266,14 +275,14 @@ impl AppModel {
     let installed = tool.installed_version()?;
     Some(if self.checking_latest.contains(tool.id) {
       UpdateStatus::Checking
+    } else if self.latest_is_stale(tool.id) {
+      UpdateStatus::Unavailable
     } else if let Some(latest) = self.latest_versions.get(tool.id) {
       if tendkit_version::is_newer(latest, installed) {
         UpdateStatus::Available { installed: installed.into(), latest: latest.clone() }
       } else {
         UpdateStatus::UpToDate
       }
-    } else if self.latest_version_errors.contains_key(tool.id) {
-      UpdateStatus::Unavailable
     } else {
       UpdateStatus::Unknown
     })
@@ -299,7 +308,7 @@ impl AppModel {
   }
 
   pub fn is_checking_updates(&self) -> bool {
-    !self.checking_latest.is_empty()
+    !self.checking_latest.is_empty() || !self.pending_latest.is_empty()
   }
 
   /// Looks up the latest version of every installed tool.
@@ -370,23 +379,30 @@ impl AppModel {
     }
     let key = LatestVersionCache::key(id, self.tool(id).and_then(|t| t.primary()).map(|i| i.source.as_str()));
     if !force {
-      if let Some(cached) = self.latest_cache.fresh(&key, SystemTime::now()) {
-        self.latest_versions.insert(id.into(), cached.version.clone());
-        cx.notify();
-        return;
-      }
       if let Some(date) = self.latest_failed_at.get(&key) {
         if SystemTime::now().duration_since(*date).unwrap_or_default() < Duration::from_secs(600) {
           return;
         }
+      } else if let Some(cached) = self.latest_cache.fresh(&key, SystemTime::now()) {
+        self.latest_versions.insert(id.into(), cached.version.clone());
+        self.latest_version_errors.remove(id);
+        cx.notify();
+        return;
       }
+    }
+    if self.checking_latest.len() >= 3 {
+      if !self.pending_latest.iter().any(|(pending, _)| pending == id) {
+        self.pending_latest.push_back((id.into(), force));
+      }
+      return;
     }
     let generation = self.latest_generation;
     self.checking_latest.insert(id.into());
     self.latest_version_errors.remove(id);
     cx.notify();
     let request = Request::new("latest").selected(vec![id.into()]).configure_shell(false);
-    let (tool, event_key) = (id.to_string(), key.clone());
+    let pending_version = Rc::new(RefCell::new(None));
+    let event_version = pending_version.clone();
     let done_tool = id.to_string();
     Self::run_engine(
       Arc::new(EngineConnection::new()),
@@ -397,30 +413,49 @@ impl AppModel {
           return;
         }
         if let Some(version) = event.data.latest_version {
-          model.latest_cache.store(&version, &event_key, SystemTime::now());
-          model.latest_versions.insert(tool.clone(), version);
-          model.latest_failed_at.remove(&event_key);
+          *event_version.borrow_mut() = Some(version);
         }
       },
-      move |model, result, _| {
+      move |model, result, cx| {
         if generation != model.latest_generation {
           return;
         }
         model.checking_latest.remove(&done_tool);
-        if model.checking_latest.is_empty() {
-          model.last_update_check = Some(SystemTime::now());
+        if result.is_ok() {
+          if let Some(version) = pending_version.borrow_mut().take() {
+            model.latest_cache.store(&version, &key, SystemTime::now());
+            model.latest_versions.insert(done_tool.clone(), version);
+            model.latest_failed_at.remove(&key);
+            model.latest_version_errors.remove(&done_tool);
+          }
         }
-        let Err(error) = result else { return };
-        model.latest_failed_at.insert(key.clone(), SystemTime::now());
-        // Prefer an expired cached version over no answer, e.g. when rate limited.
-        if let Some(stale) = model.latest_cache.entry(&key).cloned() {
-          model.latest_versions.insert(done_tool.clone(), stale.version.clone());
-          model.log.push(format!("Latest {done_tool} version check failed; showing cached {}: {error}", stale.version));
-        } else {
-          model.latest_version_errors.insert(done_tool, failure_text(&error));
+        if let Err(error) = result {
+          model.latest_failed_at.insert(key.clone(), SystemTime::now());
+          model.latest_version_errors.insert(done_tool.clone(), failure_text(&error));
+          if let Some(stale) = model.latest_cache.entry(&key).cloned() {
+            model.latest_versions.insert(done_tool.clone(), stale.version.clone());
+            model.log.push(format!("Latest {done_tool} version check failed; showing cached {}: {error}", stale.version));
+          }
+        }
+        while model.checking_latest.len() < 3 {
+          let Some((id, force)) = model.pending_latest.pop_front() else { break };
+          model.check_latest_version(&id, force, cx);
+        }
+        if !model.is_checking_updates() {
+          model.last_update_check = Some(SystemTime::now());
         }
       },
     );
+  }
+
+  pub fn latest_is_stale(&self, id: &str) -> bool {
+    self.latest_version_errors.contains_key(id)
+      || self.latest_checked_at(id).is_some_and(|at| SystemTime::now().duration_since(at).unwrap_or_default() >= LatestVersionCache::LIFETIME)
+  }
+
+  pub fn latest_checked_at(&self, id: &str) -> Option<SystemTime> {
+    let key = LatestVersionCache::key(id, self.tool(id).and_then(|t| t.primary()).map(|i| i.source.as_str()));
+    self.latest_cache.entry(&key).map(|entry| entry.checked_at)
   }
 
   pub fn refresh(&mut self, cx: &mut Context<Self>) {
@@ -433,6 +468,7 @@ impl AppModel {
     self.latest_cache.remove_all();
     self.latest_failed_at.clear();
     self.checking_latest.clear();
+    self.pending_latest.clear();
     self.scan(cx);
   }
 
@@ -724,4 +760,5 @@ fn strip_ansi(text: &str) -> String {
 }
 
 #[cfg(test)]
+#[path = "../tests/state.rs"]
 mod tests;

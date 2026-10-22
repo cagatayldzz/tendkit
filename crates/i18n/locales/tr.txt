@@ -223,3 +223,6 @@ quit.title = Bir kurulum sürüyor
 quit.detail = Çıkmak işlemi iptal eder. Tamamlanan kurulumlar korunur. Açık macOS Yükleyici penceresini ayrıca kapatın.
 quit.continue = İşleme Devam Et
 quit.cancel = İptal Et ve Çık
+
+detail.stale = {version} (önbellek · son başarılı sorgu: {time})
+detail.cache_expired = Önbellekteki sürüm bilgisinin süresi doldu. Yeniden kontrol edin.

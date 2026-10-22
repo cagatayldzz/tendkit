@@ -38,4 +38,5 @@ pub fn tf(key: &str, args: &[(&str, &str)]) -> String {
 }
 
 #[cfg(test)]
+#[path = "../tests/localization.rs"]
 mod tests;
