@@ -5,7 +5,7 @@ use std::{
   sync::{Arc, Mutex},
 };
 use tendkit_client::{EngineConnection, EventValidator, Request};
-use tendkit_protocol::{EngineEvent, EngineFailure, EventDecoder, EventType, InstallPlan, InstallStep, Installation, Recipe, StepAction, TOOL_IDS};
+use tendkit_protocol::{EngineEvent, EngineFailure, EventDecoder, EventType, InstallPlan, InstallStep, Recipe, StepAction, TOOL_IDS};
 
 fn temp_path(name: &str) -> PathBuf {
   static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -198,6 +198,8 @@ fn cancellation_reaches_engine_over_control_pipe() {
 #[cfg(target_os = "macos")]
 #[test]
 fn actual_rust_executor_accepts_current_plan_and_rejects_stale_plan() {
+  use tendkit_protocol::Installation;
+
   let root = temp_path("execution");
   let bin = root.join(".bun/bin");
   fs::create_dir_all(&bin).unwrap();
