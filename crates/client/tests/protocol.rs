@@ -195,6 +195,7 @@ fn cancellation_reaches_engine_over_control_pipe() {
   assert_eq!(events.last().unwrap().data.status.as_deref(), Some("cancelled"));
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn actual_rust_executor_accepts_current_plan_and_rejects_stale_plan() {
   let root = temp_path("execution");
@@ -231,12 +232,6 @@ fn actual_rust_executor_accepts_current_plan_and_rejects_stale_plan() {
   };
   let mut events = Vec::new();
   let request = |version| Request::new("execute").configure_shell(false).plan(plan(version));
-  if !cfg!(target_os = "macos") {
-    let error = EngineConnection::new().run(&request("1.4.3"), Some(&wrapper), |_| {}).unwrap_err();
-    assert!(error.to_string().contains("macOS only"));
-    fs::remove_dir_all(&root).unwrap();
-    return;
-  }
   EngineConnection::new().run(&request("1.4.3"), Some(&wrapper), |e| events.push(e)).unwrap();
   let finished = events.iter().find(|e| e.kind == EventType::StepFinished).unwrap();
   assert_eq!(finished.data.status.as_deref(), Some("skipped"));
@@ -254,4 +249,21 @@ fn one_scan_cannot_change_its_inherited_path_context() {
   validator.accept(&event("doctor", 1, "hello", "{}")).unwrap();
   validator.accept(&event("doctor", 2, "tool_detected", r#"{"id":"node","installations":[],"path_entries":["/a"]}"#)).unwrap();
   assert!(validator.accept(&event("doctor", 3, "tool_detected", r#"{"id":"bun","installations":[],"path_entries":["/b"]}"#)).is_err());
+}
+
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn actual_rust_executor_rejects_installation_on_unsupported_platforms() {
+  let request = Request::new("execute").configure_shell(false).plan(fixture_plan());
+  let result = EngineConnection::new().run(&request, Some(&engine_path()), |_| {});
+  assert!(
+    matches!(&result, Err(EngineFailure::Failed(message)) if message == "Tool installation is currently supported on macOS only."),
+    "Expected an explicit platform rejection, received: {result:?}"
+  );
+}
+
+#[test]
+fn actual_rust_engine_preserves_early_rejection_messages() {
+  let result = EngineConnection::new().run(&Request::new("unsupported-command"), Some(&engine_path()), |_| {});
+  assert_eq!(result, Err(EngineFailure::Failed("Unsupported protocol version or command".into())));
 }
