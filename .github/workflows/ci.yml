@@ -54,31 +54,48 @@ jobs:
           cargo build --locked -p tendkit-engine
           cargo test --locked --workspace --exclude tendkit --exclude tendkit-ui --exclude tendkit-model
 
-  # Run the full application test suite on the primary macOS architecture.
+  # Both Mac architectures run the same application checks and native engine smoke test.
   app:
-    # Apple Silicon remains the primary development architecture.
-    runs-on: macos-26
-    timeout-minutes: 20
+    name: macOS (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            arch: Apple Silicon ARM64
+          - runner: macos-15-intel
+            arch: Intel x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
       - run: rustup default stable
       # Caches dependencies only, keyed by toolchain and Cargo.lock, so a push
       # that changes TendKit sources restores the cache without re-saving it.
       # Pull requests read the cache that main builds.
       - uses: Swatinem/rust-cache@v2
         with:
-          shared-key: app
+          shared-key: app-${{ matrix.runner }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Lint
         run: cargo clippy --locked -p tendkit -p tendkit-ui -p tendkit-model --all-targets -- -D warnings
       - name: Test
         run: cargo test --locked -p tendkit -p tendkit-ui -p tendkit-model
+      - name: Build native application and engine
+        run: cargo build --locked -p tendkit -p tendkit-engine
+      - name: Verify native engine protocol
+        env:
+          SMOKE_PROFILE: debug
+        run: bun scripts/smoke-engine.js
 
   native:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-15-intel, windows-2025, ubuntu-24.04]
+        runner: [windows-2025, ubuntu-24.04]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     defaults:
