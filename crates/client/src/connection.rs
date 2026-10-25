@@ -125,11 +125,30 @@ impl EngineConnection {
   /// Runs one request to completion on the calling thread. `on_event` receives
   /// each validated event in order.
   pub fn run(&self, request: &Request, executable: Option<&Path>, mut on_event: impl FnMut(EngineEvent)) -> Result<(), EngineFailure> {
+    #[cfg(embedded_engine)]
+    let embedded = if executable.is_none() {
+      Some(
+        crate::embedded::EmbeddedEngine::extract(include_bytes!(env!("TENDKIT_ENGINE_PATH")))
+          .map_err(|error| EngineFailure::Failed(format!("Could not extract the engine: {error}")))?,
+      )
+    } else {
+      None
+    };
+
+    #[cfg(embedded_engine)]
+    let executable = executable.or_else(|| embedded.as_ref().map(|engine| engine.executable.as_path()));
     let executable = match executable {
       Some(path) => path.to_path_buf(),
       None => engine_executable()?,
     };
-    let mut child = Command::new(&executable)
+    let mut command = Command::new(&executable);
+    #[cfg(windows)]
+    {
+      use std::os::windows::process::CommandExt;
+
+      command.creation_flags(0x08000000); // CREATE_NO_WINDOW: engine communicates over pipes.
+    }
+    let mut child = command
       .stdin(Stdio::piped())
       .stdout(Stdio::piped())
       .stderr(Stdio::piped())

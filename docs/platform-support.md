@@ -20,7 +20,10 @@ updates manually on preview platforms. Other Linux distributions are not yet
 validated; the tar archive is not a self-contained AppImage.
 
 On macOS, extract the ZIP and move TendKit.app into Applications. On Windows,
-extract the entire folder and run TendKit.exe; keep tendkit-engine.exe beside it.
+extract and run the single portable TendKit.exe; no installation is needed.
+The embedded engine is extracted to a unique temporary directory for each
+operation and removed when that operation ends. Settings and caches use the
+normal per-user application data directory.
 On Ubuntu, install the Debian package through the system package installer.
 For the Linux tar archive, extract it and run `TendKit/TendKit` in a graphical
 X11 or Wayland session. The machine needs working graphics drivers and the
@@ -34,3 +37,28 @@ Windows or Linux from preview to full support.
 Windows ARM64, Linux ARM64, 32-bit systems, Android, and iOS are not shipped.
 Intel Macs require Homebrew to be installed separately through its official
 installer; TendKit's bundled Homebrew package installer requires Apple Silicon.
+
+## Windows release builds and SmartScreen
+
+Build the engine before the portable application in a Windows shell:
+
+```powershell
+cargo build --locked --release -p tendkit-engine
+$env:TENDKIT_ENGINE_PATH = (Resolve-Path target/release/tendkit-engine.exe).Path
+cargo build --locked --release -p tendkit
+```
+
+Release packaging puts only `TendKit.exe` at the root of the Windows ZIP.
+Windows releases are currently unsigned. SmartScreen can warn about an unknown
+publisher or a new download. Users who trust the official download and have
+verified its checksum can choose **More info** and **Run anyway**, when allowed
+by their device policy.
+
+For public distribution, sign the engine before embedding it, then sign the
+final application with a trusted Authenticode identity and a timestamp before
+packaging and checksum generation. Signing requires a provisioned publisher
+identity and is not configured in the current workflow. A self-signed certificate
+does not establish public trust. Even OV/EV signatures do not guarantee an
+immediate SmartScreen exemption; reputation accumulates over time. Microsoft
+Store distribution avoids SmartScreen download warnings.
+See [Microsoft's SmartScreen guidance](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation).

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { artifactNames, finalize, releaseTargets } from "./package-release.js";
@@ -52,6 +52,20 @@ test("Windows packaging passes paths as arguments without requiring an environme
     expect(() => packageWindows(source, join(root, "missing.zip"), () => {})).toThrow("did not produce an archive");
     expect(() => packageWindows(source, "", () => {})).toThrow("requires source and archive paths");
     expect(() => packageWindows(source, archive, () => { throw new Error("Compression failed"); })).toThrow("Compression failed");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// The PowerShell packager verifies the exact ZIP entry list before returning.
+test.skipIf(process.platform !== "win32")("Windows portable archive excludes adjacent engine and documentation", async () => {
+  const { packageWindows } = await import("./package-release.js");
+  const root = mkdtempSync(join(tmpdir(), "tendkit-portable-"));
+  try {
+    const source = join(root, "TendKit");
+    mkdirSync(source);
+    for (const name of ["TendKit.exe", "tendkit-engine.exe", "README.md"]) writeFileSync(join(source, name), "fixture");
+    packageWindows(source, join(root, "portable.zip"));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -167,8 +167,13 @@ the in-memory index available and are disclosed.
 ## Native desktop release targets
 
 Release preparation stamps the version once and shares identical Cargo inputs
-with native macOS ARM64/x64, Windows x64, and Linux x64 build jobs. Both executables
-are bundled per target. All jobs must pass before centralized artifact validation,
+with native macOS ARM64/x64, Windows x64, and Linux x64 build jobs. macOS and Linux
+bundle both executables. Windows release builds compile the engine first and
+embed its bytes in the client through `TENDKIT_ENGINE_PATH`. The portable ZIP
+contains only `TendKit.exe`. Each engine operation extracts a fresh helper into
+a unique temporary directory, hides its console window, and removes the helper
+after the child exits. Engine code remains outside the application's dependency
+graph. Windows debug builds continue to use the adjacent engine binary. All jobs must pass before centralized artifact validation,
 checksum generation, and publication. macOS signing and notarization remain required
 for both architectures; the updater selects its own architecture's archive.
 

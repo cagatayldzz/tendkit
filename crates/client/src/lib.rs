@@ -5,6 +5,8 @@
 //! sending requests and control messages, and validating the event stream.
 
 mod connection;
+#[cfg(any(embedded_engine, test))]
+mod embedded;
 mod validator;
 
 pub use connection::{engine_executable, EngineConnection, Request};

@@ -48,10 +48,22 @@ runs:
       if: inputs.os == 'macos'
       shell: bash
       run: bun run build
-    - name: Build Windows and Linux applications
-      if: inputs.os != 'macos'
+    - name: Build portable Windows application
+      if: inputs.os == 'windows'
+      shell: bash
+      run: |
+        cargo build --locked --release -p tendkit-engine
+        TENDKIT_ENGINE_PATH="$PWD/target/release/tendkit-engine.exe" cargo build --locked --release -p tendkit
+    - name: Build Linux applications
+      if: inputs.os == 'linux'
       shell: bash
       run: cargo build --locked --release -p tendkit -p tendkit-engine
+    - name: Test Windows portable packaging and extraction
+      if: inputs.os == 'windows'
+      shell: bash
+      run: |
+        bun test scripts/package-release.test.js
+        cargo test --locked -p tendkit-client --lib
     - name: Smoke test native engine protocol
       shell: bash
       run: bun scripts/smoke-engine.js

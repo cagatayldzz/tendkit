@@ -55,8 +55,8 @@ function packageNative(tag) {
   const stage = resolve("dist/TendKit");
   mkdirSync(stage, { recursive: true });
   const extension = os === "windows" ? ".exe" : "";
-  for (const name of ["TendKit", "tendkit-engine"]) copyFileSync(`target/release/${name}${extension}`, join(stage, `${name}${extension}`));
-  copyFileSync("docs/platform-support.md", join(stage, "README.md"));
+  for (const name of os === "windows" ? ["TendKit"] : ["TendKit", "tendkit-engine"]) copyFileSync(`target/release/${name}${extension}`, join(stage, `${name}${extension}`));
+  if (os !== "windows") copyFileSync("docs/platform-support.md", join(stage, "README.md"));
   if (os === "windows") {
     packageWindows(stage, resolve(`dist/${base}.zip`));
     return;
