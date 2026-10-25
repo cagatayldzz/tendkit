@@ -11,14 +11,50 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  test:
+  validate:
+    name: 1 · Validate
     if: github.ref_name == github.event.repository.default_branch
-    uses: ./.github/workflows/ci.yml
-    with:
-      full_platform: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate release requirements
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          for variable in OPENAI_API_KEY APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD; do
+            test -n "${!variable}" || { echo "Add the $variable Actions secret." >&2; exit 1; }
+          done
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: rustup default stable
+      - name: Check scripts, architecture, test layout, and formatting
+        run: |
+          bun test scripts
+          bun run check:layers
+          bun run check:test-layout
+          cargo fmt --all -- --check
+      - name: Install test dependencies
+        run: sudo apt-get install -y --no-install-recommends zsh
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: core
+      - name: Lint core packages
+        run: cargo clippy --locked --workspace --exclude tendkit --exclude tendkit-ui --exclude tendkit-model --all-targets -- -D warnings
+      - name: Test core packages
+        run: |
+          cargo build --locked -p tendkit-engine
+          cargo test --locked --workspace --exclude tendkit --exclude tendkit-ui --exclude tendkit-model
 
   prepare:
-    if: github.ref_name == github.event.repository.default_branch
+    name: 2 · Prepare version
+    needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -33,18 +69,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.3
-      - name: Validate release requirements
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: |
-          for variable in OPENAI_API_KEY APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD; do
-            test -n "${!variable}" || { echo "Add the $variable Actions secret." >&2; exit 1; }
-          done
       - name: Prepare version once for all platforms
         id: version
         env:
@@ -75,91 +99,80 @@ jobs:
             apps/tendkit/macos/Info.plist
             dist/RELEASE_NOTES.md
 
-  build:
+
+  macos_arm64:
+    name: 3 · macOS Apple Silicon
     needs: prepare
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-26
-            os: macos
-            arch: arm64
-          - runner: macos-15-intel
-            os: macos
-            arch: x64
-          - runner: windows-2025
-            os: windows
-            arch: x64
-          - runner: ubuntu-24.04
-            os: linux
-            arch: x64
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-26
     timeout-minutes: 90
-    defaults:
-      run:
-        shell: bash
     env:
-      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v8
+      - uses: ./.github/actions/build-release
         with:
-          name: release-inputs
-          path: .
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.3
-      - name: Install stable Rust
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
-      - name: Install Linux build dependencies
-        if: matrix.os == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang cmake pkg-config protobuf-compiler libasound2-dev libclang-dev libfontconfig1-dev libfreetype6-dev libx11-xcb-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev libegl1-mesa-dev libzstd-dev libssl-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-render0-dev libxrandr-dev libxi-dev
-      - name: Install Windows build dependencies
-        if: matrix.os == 'windows'
-        run: choco install protoc --yes --no-progress
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: release-${{ matrix.os }}-${{ matrix.arch }}
-      - name: Build macOS application
-        if: matrix.os == 'macos'
-        run: bun run build
-      - name: Build Windows and Linux applications
-        if: matrix.os != 'macos'
-        run: cargo build --locked --release -p tendkit -p tendkit-engine
-      - name: Smoke test native engine protocol
-        run: bun scripts/smoke-engine.js
-      - name: Sign and notarize macOS application
-        if: matrix.os == 'macos'
-        env:
-          APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: bash scripts/notarize-app.sh
-      - name: Package native applications
-        run: bun scripts/package-release.js package
-      - uses: actions/upload-artifact@v7
-        with:
-          name: release-${{ matrix.os }}-${{ matrix.arch }}
-          if-no-files-found: error
-          path: |
-            dist/TendKit-*.zip
-            dist/TendKit-*.tar.gz
-            dist/TendKit-*.deb
+          os: macos
+          arch: arm64
+          release-tag: ${{ needs.prepare.outputs.tag }}
 
-  publish:
-    needs: [test, prepare, build]
+  macos_intel:
+    name: 3 · macOS Intel
+    needs: prepare
+    runs-on: macos-15-intel
+    timeout-minutes: 90
+    env:
+      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/build-release
+        with:
+          os: macos
+          arch: x64
+          release-tag: ${{ needs.prepare.outputs.tag }}
+
+  windows:
+    name: 3 · Windows x64
+    needs: prepare
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/build-release
+        with:
+          os: windows
+          arch: x64
+          release-tag: ${{ needs.prepare.outputs.tag }}
+
+  linux:
+    name: 3 · Linux x64
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/build-release
+        with:
+          os: linux
+          arch: x64
+          release-tag: ${{ needs.prepare.outputs.tag }}
+
+  verify:
+    name: 4 · Verify packages
+    if: success()
+    needs: [macos_arm64, macos_intel, windows, linux]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    env:
-      GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-      RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+      sha: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
@@ -169,16 +182,51 @@ jobs:
         with:
           name: release-inputs
           path: .
+      - name: Read prepared version
+        id: metadata
+        run: |
+          bun -e 'const fs = require("node:fs"); const { version } = JSON.parse(fs.readFileSync("package.json", "utf8")); fs.appendFileSync(process.env.GITHUB_OUTPUT, `tag=v${version}\n`);'
       - uses: actions/download-artifact@v8
         with:
           pattern: release-*-*
           merge-multiple: true
           path: dist
       - name: Verify platform matrix and generate combined checksums
+        env:
+          RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         run: bun scripts/package-release.js finalize
+      - name: Preserve verified release
+        uses: actions/upload-artifact@v7
+        with:
+          name: verified-release
+          if-no-files-found: error
+          path: |
+            dist/TendKit-*.zip
+            dist/TendKit-*.tar.gz
+            dist/TendKit-*.deb
+            dist/SHA256SUMS.txt
+            dist/RELEASE_NOTES.md
+
+  publish:
+    name: 5 · Publish
+    if: success()
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.verify.outputs.tag }}
+      RELEASE_SHA: ${{ needs.verify.outputs.sha }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: verified-release
+          path: dist
       - name: Publish GitHub release
         run: |
-          gh release create "$RELEASE_TAG" dist/TendKit-*.zip dist/TendKit-*.tar.gz dist/TendKit-*.deb dist/SHA256SUMS.txt \
+          cd dist
+          sha256sum --check SHA256SUMS.txt
+          gh release create "$RELEASE_TAG" TendKit-*.zip TendKit-*.tar.gz TendKit-*.deb SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$RELEASE_SHA" --title "TendKit ${RELEASE_TAG#v}" \
-            --notes-file dist/RELEASE_NOTES.md --draft
+            --notes-file RELEASE_NOTES.md --draft
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

@@ -1,0 +1,74 @@
+name: Build native release
+description: Test, build, verify, sign where applicable, and package a native desktop release.
+inputs:
+  os:
+    description: Target operating system.
+    required: true
+  arch:
+    description: Target processor architecture.
+    required: true
+  release-tag:
+    description: Prepared release tag.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v8
+      with:
+        name: release-inputs
+        path: .
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: 1.4.3
+    - name: Install stable Rust
+      shell: bash
+      run: |
+        rustup toolchain install stable --profile minimal
+        rustup default stable
+    - name: Install Linux build dependencies
+      if: inputs.os == 'linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends clang cmake pkg-config protobuf-compiler libasound2-dev libclang-dev libfontconfig1-dev libfreetype6-dev libx11-xcb-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev libegl1-mesa-dev libzstd-dev libssl-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-render0-dev libxrandr-dev libxi-dev
+    - name: Install Windows build dependencies
+      if: inputs.os == 'windows'
+      shell: bash
+      run: choco install protoc --yes --no-progress
+    - uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: release-${{ inputs.os }}-${{ inputs.arch }}
+    - name: Lint and test macOS application
+      if: inputs.os == 'macos'
+      shell: bash
+      run: |
+        cargo clippy --locked -p tendkit -p tendkit-ui -p tendkit-model --all-targets -- -D warnings
+        cargo test --locked -p tendkit -p tendkit-ui -p tendkit-model
+    - name: Build macOS application
+      if: inputs.os == 'macos'
+      shell: bash
+      run: bun run build
+    - name: Build Windows and Linux applications
+      if: inputs.os != 'macos'
+      shell: bash
+      run: cargo build --locked --release -p tendkit -p tendkit-engine
+    - name: Smoke test native engine protocol
+      shell: bash
+      run: bun scripts/smoke-engine.js
+    - name: Sign and notarize macOS application
+      if: inputs.os == 'macos'
+      shell: bash
+      run: bash scripts/notarize-app.sh
+    - name: Package native applications
+      env:
+        RELEASE_TAG: ${{ inputs.release-tag }}
+      shell: bash
+      run: bun scripts/package-release.js package
+    - uses: actions/upload-artifact@v7
+      with:
+        name: release-${{ inputs.os }}-${{ inputs.arch }}
+        if-no-files-found: error
+        path: |
+          dist/TendKit-*.zip
+          dist/TendKit-*.tar.gz
+          dist/TendKit-*.deb

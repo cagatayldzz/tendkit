@@ -112,6 +112,24 @@ updates remain macOS-only. Windows packages are unsigned. See
 [platform support](docs/platform-support.md) for installation, runtime
 requirements, and the exact support boundaries.
 
+The release graph follows the work order. Validation finishes before version
+preparation or platform builds start. Native application tests run inside their
+build jobs, and only verified artifacts reach publication.
+
+```mermaid
+flowchart LR
+  V["1 · Validate"] --> P["2 · Prepare version"]
+  P --> A["3 · macOS Apple Silicon"]
+  P --> I["3 · macOS Intel"]
+  P --> W["3 · Windows x64"]
+  P --> L["3 · Linux x64"]
+  A --> C["4 · Verify packages"]
+  I --> C
+  W --> C
+  L --> C
+  C --> R["5 · Publish"]
+```
+
 Required repository secrets:
 
 | Secret | Purpose |

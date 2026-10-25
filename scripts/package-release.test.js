@@ -26,3 +26,33 @@ test("every desktop target is required before checksums can be published", () =>
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("Windows packaging passes paths as arguments without requiring an environment variable", async () => {
+  const { packageWindows } = await import("./package-release.js");
+  const root = mkdtempSync(join(tmpdir(), "tendkit windows' package-"));
+  const archive = join(root, "TendKit release.zip");
+  const source = join(root, "TendKit");
+  try {
+    packageWindows(source, archive, (args) => {
+      expect(args[0]).toBe("powershell.exe");
+      expect(args).toContain("-File");
+      expect(args).not.toContain("-Command");
+      expect(args[args.indexOf("-SourcePath") + 1]).toBe(source);
+      expect(args[args.indexOf("-ArchivePath") + 1]).toBe(archive);
+      expect(args.some((arg) => arg.includes("$env:"))).toBe(false);
+      // A child process sees complete paths even with spaces and apostrophes.
+      const child = Bun.spawnSync([process.execPath, "-e", "console.log(JSON.stringify(process.argv.slice(1)))", ...args], {
+        stdout: "pipe",
+        stderr: "pipe"
+      });
+      expect(child.exitCode).toBe(0);
+      expect(JSON.parse(child.stdout.toString())).toEqual(args);
+      writeFileSync(archive, "archive fixture");
+    });
+    expect(() => packageWindows(source, join(root, "missing.zip"), () => {})).toThrow("did not produce an archive");
+    expect(() => packageWindows(source, "", () => {})).toThrow("requires source and archive paths");
+    expect(() => packageWindows(source, archive, () => { throw new Error("Compression failed"); })).toThrow("Compression failed");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

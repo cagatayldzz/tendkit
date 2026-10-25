@@ -4,19 +4,13 @@ on:
   push:
     branches: [main]
   pull_request:
-  workflow_call:
-    inputs:
-      full_platform:
-        description: Run macOS and Windows application checks for a release.
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !inputs.full_platform }}
+  cancel-in-progress: true
 
 jobs:
   # Every push runs lightweight checks and core Rust tests on Ubuntu only.
@@ -58,78 +52,3 @@ jobs:
         run: |
           cargo build --locked -p tendkit-engine
           cargo test --locked --workspace --exclude tendkit --exclude tendkit-ui --exclude tendkit-model
-
-  # Both Mac architectures run the same application checks and native engine smoke test.
-  app:
-    if: inputs.full_platform
-    name: macOS (${{ matrix.arch }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-26
-            arch: Apple Silicon ARM64
-          - runner: macos-15-intel
-            arch: Intel x64
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.3
-      - run: rustup default stable
-      # Caches dependencies only, keyed by toolchain and Cargo.lock, so a push
-      # that changes TendKit sources restores the cache without re-saving it.
-      # Pull requests read the cache that main builds.
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: app-${{ matrix.runner }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Lint
-        run: cargo clippy --locked -p tendkit -p tendkit-ui -p tendkit-model --all-targets -- -D warnings
-      - name: Test
-        run: cargo test --locked -p tendkit -p tendkit-ui -p tendkit-model
-      - name: Build native application and engine
-        run: cargo build --locked -p tendkit -p tendkit-engine
-      - name: Verify native engine protocol
-        env:
-          SMOKE_PROFILE: debug
-        run: bun scripts/smoke-engine.js
-
-  native:
-    if: inputs.full_platform
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [windows-2025, ubuntu-24.04]
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.3
-      - run: rustup default stable
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang cmake pkg-config protobuf-compiler libasound2-dev libclang-dev libfontconfig1-dev libfreetype6-dev libx11-xcb-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev libegl1-mesa-dev libzstd-dev libssl-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-render0-dev libxrandr-dev libxi-dev
-      - name: Install Windows build dependencies
-        if: runner.os == 'Windows'
-        run: choco install protoc --yes --no-progress
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: native-${{ runner.os }}-${{ runner.arch }}
-      - name: Check native application and engine
-        run: cargo check --locked --workspace
-      - name: Build native engine
-        run: cargo build --locked -p tendkit-engine
-      - name: Verify native engine protocol
-        env:
-          SMOKE_PROFILE: debug
-        run: bun scripts/smoke-engine.js

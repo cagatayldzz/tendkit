@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync, chmodSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const releaseTargets = [
   { runner: "macos-26", os: "macos", arch: "arm64", suffixes: ["macos-arm64.zip"] },
@@ -32,6 +33,13 @@ export function finalize(directory, tag) {
   return names;
 }
 
+export function packageWindows(source, archive, execute = run) {
+  if (!source || !archive) throw new Error("Windows packaging requires source and archive paths.");
+  const script = fileURLToPath(new URL("package-windows.ps1", import.meta.url));
+  execute(["powershell.exe", "-NoProfile", "-NonInteractive", "-File", script, "-SourcePath", source, "-ArchivePath", archive]);
+  if (!existsSync(archive) || !statSync(archive).size) throw new Error("Windows packaging did not produce an archive.");
+}
+
 function packageNative(tag) {
   artifactNames(tag);
   const os = { darwin: "macos", win32: "windows", linux: "linux" }[process.platform];
@@ -50,7 +58,7 @@ function packageNative(tag) {
   for (const name of ["TendKit", "tendkit-engine"]) copyFileSync(`target/release/${name}${extension}`, join(stage, `${name}${extension}`));
   copyFileSync("docs/platform-support.md", join(stage, "README.md"));
   if (os === "windows") {
-    run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Compress-Archive -LiteralPath 'dist/TendKit' -DestinationPath $env:TENDKIT_ARCHIVE -Force"].map(String));
+    packageWindows(stage, resolve(`dist/${base}.zip`));
     return;
   }
   run(["tar", "-czf", `dist/${base}.tar.gz`, "-C", "dist", "TendKit"]);
@@ -72,7 +80,6 @@ if (import.meta.main) {
     const tag = process.env.RELEASE_TAG;
     if (process.argv[2] === "finalize") finalize("dist", tag);
     else if (process.argv[2] === "package") {
-      process.env.TENDKIT_ARCHIVE = resolve(`dist/TendKit-${tag}-windows-x64.zip`);
       packageNative(tag);
     } else throw new Error("Usage: bun scripts/package-release.js [package|finalize]");
   } catch (error) {
