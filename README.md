@@ -38,6 +38,7 @@ Up-to-date tools are not reinstalled, and only one engine can run at a time.
 ```sh
 bun run dev       # build and launch the app
 bun run build     # local release build → dist/TendKit.app
+bun run update    # update Cargo.lock for all workspace dependencies within manifest constraints
 bun run check     # layers, test layout, formatting, clippy, and tests
 bun run test      # script and Rust tests
 bun run icons     # regenerate the app icons
