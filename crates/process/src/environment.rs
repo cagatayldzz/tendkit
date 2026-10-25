@@ -4,7 +4,7 @@ use std::{
 };
 
 pub fn home() -> Result<PathBuf, String> {
-  env::var_os("HOME").map(PathBuf::from).filter(|p| p.is_absolute()).ok_or("HOME is unavailable".into())
+  env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).filter(|p| p.is_absolute()).ok_or("HOME is unavailable".into())
 }
 
 fn append_child_bins(parent: PathBuf, dirs: &mut Vec<PathBuf>) {
@@ -17,6 +17,19 @@ fn append_child_bins(parent: PathBuf, dirs: &mut Vec<PathBuf>) {
 
 pub fn search_dirs() -> Vec<PathBuf> {
   let mut dirs: Vec<_> = env::split_paths(&env::var_os("PATH").unwrap_or_default()).filter(|p| p.is_absolute()).collect();
+  if cfg!(windows) {
+    if let Ok(home) = home() {
+      for suffix in [".cargo/bin", ".bun/bin", ".local/bin", "AppData/Roaming/npm", "AppData/Local/Microsoft/WinGet/Links"] {
+        dirs.push(home.join(suffix));
+      }
+    }
+    for key in ["ProgramFiles", "ProgramFiles(x86)"] {
+      if let Some(root) = env::var_os(key) {
+        dirs.push(PathBuf::from(root).join("nodejs"));
+      }
+    }
+    return dirs;
+  }
   if let Some(home) = env::var_os("HOME") {
     let home = PathBuf::from(home);
     for suffix in [".local/bin", ".bun/bin", ".volta/bin", ".local/share/mise/shims", ".asdf/shims", ".npm-global/bin", ".pyenv/shims", ".cargo/bin"]

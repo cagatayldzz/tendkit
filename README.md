@@ -98,9 +98,16 @@ run `bun run release` from a clean `main` (requires `gh auth login`), or start
 
 The version bump is derived from commit messages since the last tag
 (`feat:` → minor, `type!:` / `BREAKING CHANGE:` → major, otherwise patch).
-Release notes are generated from commit titles with OpenAI. The app is signed with
-Developer ID, notarized, and published as `TendKit-vVERSION-macos-arm64.zip`
-with `SHA256SUMS.txt`.
+Release notes are generated from commit titles with OpenAI. Native build jobs
+produce macOS Apple Silicon and Intel ZIPs, a Windows x64 ZIP, and Linux x64
+TAR/DEB packages. Both macOS apps are signed with Developer ID and notarized.
+A combined `SHA256SUMS.txt` covers all five packages. Nothing is published unless
+the checks and every native build and engine protocol smoke test pass.
+
+Windows and Linux are inspection previews: tool installation and automatic app
+updates remain macOS-only. Windows packages are unsigned. See
+[platform support](docs/platform-support.md) for installation, runtime
+requirements, and the exact support boundaries.
 
 Required repository secrets:
 

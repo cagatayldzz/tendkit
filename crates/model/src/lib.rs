@@ -2,7 +2,9 @@
 //! by engine events and observed by the interface.
 
 mod app_update;
+mod disk;
 mod doctor;
+pub use tendkit_storage::disk::{DiskEntry, DiskReport};
 
 pub use app_update::{AppUpdate, APP_UPDATES_ENABLED, APP_VERSION};
 pub use doctor::{DoctorCheck, DoctorFinding, DoctorInstallation, DoctorReport, DoctorSeverity};
@@ -143,6 +145,7 @@ enum Message {
 }
 
 pub struct AppModel {
+  pub disk: disk::DiskState,
   pub tools: Vec<ToolRow>,
   pub is_scanning: bool,
   pub error: Option<String>,
@@ -215,6 +218,7 @@ impl AppModel {
     let settings = AppSettings::load(&AppSettings::default_path());
     apply_language(effective_language(&settings));
     Self {
+      disk: disk::DiskState::default(),
       tools: TOOL_IDS.iter().map(|id| ToolRow::new(id)).collect(),
       is_scanning: false,
       error: None,

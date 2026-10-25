@@ -1,13 +1,15 @@
+#[cfg(unix)]
+use std::os::unix::{fs::PermissionsExt, process::CommandExt};
 use std::{
   collections::{BTreeMap, HashSet},
   env, fs,
   io::Read,
-  os::unix::{fs::PermissionsExt, process::CommandExt},
   path::{Path, PathBuf},
   process::{Command, Stdio},
   thread,
   time::{Duration, Instant},
 };
+
 use tendkit_process::{search_dirs, ProbeGroup};
 use tendkit_protocol::Installation;
 
@@ -26,7 +28,7 @@ pub const TOOLS: &[Tool] = &[
   Tool { id: "node", title: "Node.js + npm", binaries: &["node"] },
   Tool { id: "npm", title: "npm", binaries: &["npm"] },
   Tool { id: "bun", title: "Bun", binaries: &["bun"] },
-  Tool { id: "python", title: "Python", binaries: &["python3"] },
+  Tool { id: "python", title: "Python", binaries: &["python3", "python"] },
   Tool { id: "rust", title: "Rust", binaries: &["rustc"] },
   Tool { id: "codex", title: "Codex", binaries: &["codex"] },
   Tool { id: "claude", title: "Claude Code", binaries: &["claude"] },
@@ -38,11 +40,20 @@ pub fn tool(id: &str) -> Option<&'static Tool> {
 }
 
 fn executable(path: &Path) -> bool {
-  fs::metadata(path).map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0).unwrap_or(false)
+  #[cfg(unix)]
+  {
+    fs::metadata(path).map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0).unwrap_or(false)
+  }
+
+  #[cfg(windows)]
+  {
+    path.is_file()
+  }
 }
 
 fn source(path: &Path) -> String {
   // rustup proxies may be hard links, including under a custom CARGO_HOME.
+  #[cfg(unix)]
   if path.file_name().is_some_and(|name| name == "rustc") {
     use std::os::unix::fs::MetadataExt;
     if let Some(parent) = path.parent() {
@@ -117,7 +128,9 @@ fn version(binary: &Path, dirs: &[PathBuf]) -> Result<String, String> {
 
 fn version_within(binary: &Path, dirs: &[PathBuf], timeout: Duration) -> Result<String, String> {
   let mut command = Command::new(binary);
-  command.arg("--version").stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).process_group(0);
+  command.arg("--version").stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+  #[cfg(unix)]
+  command.process_group(0);
   // Scripts using /usr/bin/env node also work when launched by Finder.
   let mut child_dirs = vec![binary.parent().unwrap_or(Path::new("/usr/bin")).to_owned()];
   child_dirs.extend_from_slice(dirs);
@@ -177,7 +190,15 @@ pub fn detect(tool: &Tool, dirs: &[PathBuf]) -> Vec<Installation> {
   let mut seen = HashSet::new();
   for dir in dirs {
     for name in tool.binaries {
-      let path = dir.join(name);
+      let path = if cfg!(windows) {
+        [".exe", ".cmd", ".bat", ""]
+          .iter()
+          .map(|extension| dir.join(format!("{name}{extension}")))
+          .find(|path| path.is_file())
+          .unwrap_or_else(|| dir.join(name))
+      } else {
+        dir.join(name)
+      };
       if !executable(&path) {
         continue;
       }
@@ -213,6 +234,6 @@ pub fn primary<'a>(snapshot: &'a Snapshot, id: &str) -> Option<&'a Installation>
   snapshot.get(id)?.first()
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 #[path = "../tests/detection.rs"]
 mod tests;

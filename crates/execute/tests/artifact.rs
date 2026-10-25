@@ -43,7 +43,7 @@ fn step() -> InstallStep {
 
 #[test]
 fn checksum_failure_never_executes_download() {
-  let work = crate::WorkDir::new().unwrap();
+  let work = crate::unix::WorkDir::new().unwrap();
   let mut runner = FakeRunner { hash: "b".repeat(64), ..Default::default() };
   assert!(install(&step(), &work.0, &work.0.join("unused"), &mut runner).unwrap_err().contains("checksum does not match"));
   assert_eq!(runner.calls.len(), 3);
@@ -52,7 +52,7 @@ fn checksum_failure_never_executes_download() {
 
 #[test]
 fn cancellation_stops_before_verification_or_execution() {
-  let work = crate::WorkDir::new().unwrap();
+  let work = crate::unix::WorkDir::new().unwrap();
   let mut runner = FakeRunner { fail_download: true, ..Default::default() };
   assert!(install(&step(), &work.0, &work.0.join("unused"), &mut runner).unwrap_err().contains("cancelled"));
   assert_eq!(runner.calls.len(), 2);
@@ -60,7 +60,7 @@ fn cancellation_stops_before_verification_or_execution() {
 
 #[test]
 fn verified_binary_runs_only_after_checksum() {
-  let work = crate::WorkDir::new().unwrap();
+  let work = crate::unix::WorkDir::new().unwrap();
   let mut runner = FakeRunner { hash: "a".repeat(64), ..Default::default() };
   install(&step(), &work.0, &work.0.join("unused"), &mut runner).unwrap();
   assert_eq!(runner.calls[2], "/usr/bin/shasum");
@@ -81,11 +81,11 @@ fn release_metadata_rejects_wrong_origin_tag_or_digest() {
 
 #[test]
 fn homebrew_requires_expected_leaf_signer_and_trust() {
-  assert!(crate::valid_homebrew_signature(
+  assert!(crate::unix::valid_homebrew_signature(
     "Status: signed by a certificate trusted by macOS\n  1. Developer ID Installer: Patrick Linnane (927JGANW46)\n"
   ));
-  assert!(!crate::valid_homebrew_signature("Status: signed by a certificate trusted by macOS\n  1. Developer ID Installer: Someone Else (UNKNOWN)\n  2. Developer ID Installer: Patrick Linnane (927JGANW46)"));
-  assert!(!crate::valid_homebrew_signature("1. Developer ID Installer: Patrick Linnane (927JGANW46)"));
+  assert!(!crate::unix::valid_homebrew_signature("Status: signed by a certificate trusted by macOS\n  1. Developer ID Installer: Someone Else (UNKNOWN)\n  2. Developer ID Installer: Patrick Linnane (927JGANW46)"));
+  assert!(!crate::unix::valid_homebrew_signature("1. Developer ID Installer: Patrick Linnane (927JGANW46)"));
 }
 
 struct ArchiveRunner {
@@ -123,7 +123,7 @@ impl Runner for ArchiveRunner {
 
 #[test]
 fn archive_failure_preserves_existing_binary_and_success_replaces_it() {
-  let work = crate::WorkDir::new().unwrap();
+  let work = crate::unix::WorkDir::new().unwrap();
   let destination = work.0.join("bin/bun");
   fs::create_dir_all(destination.parent().unwrap()).unwrap();
   fs::write(&destination, b"old binary").unwrap();

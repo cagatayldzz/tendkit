@@ -54,10 +54,9 @@ jobs:
           cargo build --locked -p tendkit-engine
           cargo test --locked --workspace --exclude tendkit --exclude tendkit-ui --exclude tendkit-model
 
-  # The GPUI crates (model, ui, and the app) need macOS, the only platform TendKit
-  # ships on. One job instead of two means waiting for one macOS runner, not two.
+  # Run the full application test suite on the primary macOS architecture.
   app:
-    # TendKit targets Apple Silicon only, so build on the same architecture.
+    # Apple Silicon remains the primary development architecture.
     runs-on: macos-26
     timeout-minutes: 20
     steps:
@@ -74,3 +73,39 @@ jobs:
         run: cargo clippy --locked -p tendkit -p tendkit-ui -p tendkit-model --all-targets -- -D warnings
       - name: Test
         run: cargo test --locked -p tendkit -p tendkit-ui -p tendkit-model
+
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15-intel, windows-2025, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - run: rustup default stable
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang cmake pkg-config protobuf-compiler libasound2-dev libclang-dev libfontconfig1-dev libfreetype6-dev libx11-xcb-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev libegl1-mesa-dev libzstd-dev libssl-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-render0-dev libxrandr-dev libxi-dev
+      - name: Install Windows build dependencies
+        if: runner.os == 'Windows'
+        run: choco install protoc --yes --no-progress
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: native-${{ runner.os }}-${{ runner.arch }}
+      - name: Check native application and engine
+        run: cargo check --locked --workspace
+      - name: Build native engine
+        run: cargo build --locked -p tendkit-engine
+      - name: Verify native engine protocol
+        env:
+          SMOKE_PROFILE: debug
+        run: bun scripts/smoke-engine.js

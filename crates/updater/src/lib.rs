@@ -2,6 +2,11 @@
 //! it (SHA-256, code signature, Gatekeeper, matching team), then swaps the
 //! running `.app` bundle and relaunches it.
 
+#[cfg(unix)]
+mod install;
+
+#[cfg(windows)]
+#[path = "manual.rs"]
 mod install;
 mod process;
 mod release;
@@ -29,6 +34,6 @@ impl fmt::Display for UpdateError {
 
 impl std::error::Error for UpdateError {}
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 #[path = "../tests/updates.rs"]
 mod tests;

@@ -1,3 +1,5 @@
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 //! The TendKit application: window, menus, and application-level actions.
 
 use gpui_kit::{component::TitleBar, *};

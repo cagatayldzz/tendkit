@@ -49,6 +49,9 @@ fn brew_recipe(id: &str, installed: &Installation) -> Result<Recipe, String> {
 }
 
 fn recipe(id: &str, installed: Option<&Installation>, state: &Snapshot) -> Result<Recipe, String> {
+  if cfg!(windows) {
+    return Err("Tool installation on Windows is not supported by this build. Use the tool's original package manager.".into());
+  }
   if id == "homebrew" {
     return Ok(Recipe::Homebrew);
   }
@@ -86,6 +89,9 @@ fn recipe(id: &str, installed: Option<&Installation>, state: &Snapshot) -> Resul
 /// Whether TendKit can install or update this tool. The GUI relies on this
 /// instead of duplicating the recipe rules.
 pub fn manageable(id: &str, state: &Snapshot) -> bool {
+  if !cfg!(target_os = "macos") {
+    return false;
+  }
   if id == "npm" {
     return false;
   }
@@ -304,6 +310,9 @@ fn resolve(recipe: &Recipe, package: Option<&InstallPackage>, sink: &mut Sink) -
 }
 
 pub fn prepare(selected: &[String], configure_shell: bool, sink: &mut Sink) -> Result<InstallPlan, String> {
+  if !cfg!(target_os = "macos") {
+    return Err("Tool installation is currently supported on macOS only. Use the original package manager on this platform.".into());
+  }
   sink("log", json!({"message": "Checking installation sources and target versions…"}))?;
   let state = snapshot();
   let needs_homebrew = selected.iter().any(|s| ["homebrew", "node", "npm", "python", "rust"].contains(&s.as_str()));

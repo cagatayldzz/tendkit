@@ -12,7 +12,7 @@ use tendkit_updater::{Release, Stage};
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Developer builds never check for or install published application releases.
-pub const APP_UPDATES_ENABLED: bool = !cfg!(debug_assertions);
+pub const APP_UPDATES_ENABLED: bool = !cfg!(debug_assertions) && cfg!(target_os = "macos");
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AppUpdate {

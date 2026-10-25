@@ -9,12 +9,15 @@ use std::{
 use tendkit_protocol::PROTOCOL_VERSION;
 
 static TERMINATED: AtomicBool = AtomicBool::new(false);
+
+#[cfg(unix)]
 extern "C" fn terminated(_: libc::c_int) {
   TERMINATED.store(true, Ordering::SeqCst);
 }
 
 /// Treat SIGTERM (sent by the GUI watchdog) as a cancellation request.
 pub fn cancel_on_sigterm() {
+  #[cfg(unix)]
   unsafe {
     libc::signal(libc::SIGTERM, terminated as extern "C" fn(libc::c_int) as libc::sighandler_t);
   }

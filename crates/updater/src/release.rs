@@ -85,7 +85,7 @@ pub fn parse_release(json: &str, slug: &str) -> Result<Release, UpdateError> {
   let value: serde_json::Value = serde_json::from_str(json).map_err(|_| UpdateError::new("Could not read the release information."))?;
   let tag = value["tag_name"].as_str().ok_or_else(invalid)?;
   let version = tag.strip_prefix('v').filter(|v| is_plain_version(v)).ok_or_else(invalid)?;
-  let archive_name = format!("TendKit-{tag}-macos-arm64.zip");
+  let archive_name = format!("TendKit-{tag}-macos-{}.zip", if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" });
   let prefix = format!("https://github.com/{slug}/releases/download/{tag}/");
   let asset = |name: &str| -> Result<String, UpdateError> {
     let url =

@@ -125,3 +125,58 @@ commands that the user may copy into a terminal. It never runs repair commands,
 installs tools, edits shell files, or deletes binaries. The scope text explains
 that Finder's inherited PATH may differ from a terminal; aliases, functions,
 relative PATH directories, and project-specific manager overrides are not resolved.
+
+## Disk usage
+
+`storage::disk` provides read-only filesystem inspection. `model::disk` runs it
+on the background executor, stores results, and supplies cooperative cancellation.
+`ui::disk` adds a sidebar destination with filesystem capacity, allocated sizes,
+size bars, incremental listing, folder navigation, refresh, and stop controls. Scans begin in Home.
+
+Each index build is bounded to ten minutes, one million visited entries, and 128 levels of nesting, never follows symbolic
+links, and deduplicates Unix hard links. Errors and interrupted scans are marked
+partial; directory totals are lower bounds. Filesystem capacity is obtained from
+`df -k -P` independently of traversal. APFS shared blocks and snapshots mean
+folder sizes cannot be reconciled exactly with filesystem usage. No deletion or
+installation operations are exposed by this view.
+
+The Environment destination (formerly Doctor) uses the same local diagnostic
+rules. Disk inspection applies a conservative macOS privacy policy before any
+metadata or directory access: personal privacy domains (including Library),
+other users, mounted providers, and system data are excluded. Excluded rows show
+no measured size and cannot be entered. The view distinguishes these exclusions
+from read failures and interrupted scans. This intentionally trades coverage for
+avoiding repeated permission prompts; it does not request Full Disk Access.
+The disk view uses GPUI Kit Breadcrumb, Progress, Skeleton, Input, Button, and Tag
+components with a compact capacity/navigation area that scrolls with the file list.
+Search, name/size sorting, and hidden-item filtering work on the measured report.
+
+Disk indexing starts once on first entry, or restores a versioned snapshot from
+`disk-index.json` in the support directory. The index spans the disk root while
+prioritizing the current user and retaining privacy exclusions. Every visited
+directory stores its immediate entries and aggregate sizes. Folder navigation,
+search, and sorting only query memory; they never traverse the filesystem.
+Scan Again explicitly rebuilds the whole index. A stopped refresh preserves the
+previous saved index when available. Initial partial results can be saved and
+are marked incomplete; unmeasured locations display no size.
+The cache is atomically written with mode 0600 and validated against its schema,
+root, user home, timestamp, and size limit on load. The UI shows the snapshot
+time since sizes and capacity are intentionally not live. Save failures keep
+the in-memory index available and are disclosed.
+
+## Native desktop release targets
+
+Release preparation stamps the version once and shares identical Cargo inputs
+with native macOS ARM64/x64, Windows x64, and Linux x64 build jobs. Both executables
+are bundled per target. All jobs must pass before centralized artifact validation,
+checksum generation, and publication. macOS signing and notarization remain required
+for both architectures; the updater selects its own architecture's archive.
+
+`execute::unix` retains the macOS installation implementation. Windows execution
+rejects mutations explicitly; Linux execution and plan preparation also reject
+unsupported installation operations. Unix recipe unit tests remain independent
+of host execution. Windows discovery uses executable suffixes and native search
+paths, with a separate process supervisor. `shellrc` is Unix-only. Automatic
+application updates are enabled only on release macOS builds. Preview limitations
+are visible in the catalog and release notes; supported targets and runtime
+requirements live in [platform-support.md](platform-support.md).

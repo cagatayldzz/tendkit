@@ -1,3 +1,6 @@
+//! Unix shell configuration. Windows preview builds do not edit shell files.
+#![cfg(unix)]
+
 use std::{
   fs::{self, OpenOptions},
   io::Write,

@@ -11,15 +11,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Tests run alongside the build; nothing is published unless both pass.
   test:
     if: github.ref_name == github.event.repository.default_branch
     uses: ./.github/workflows/ci.yml
 
-  build:
+  prepare:
     if: github.ref_name == github.event.repository.default_branch
-    runs-on: macos-26
-    timeout-minutes: 60
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
     outputs:
@@ -32,14 +31,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.3
-      - name: Install stable Rust
-        run: rustup toolchain install stable --profile minimal
-      - run: rustup default stable
-      # Restored before the version is stamped into the manifests, so the key
-      # depends only on the toolchain and Cargo.lock.
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: release
       - name: Validate release requirements
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -52,8 +43,7 @@ jobs:
           for variable in OPENAI_API_KEY APPLE_CERTIFICATE_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD; do
             test -n "${!variable}" || { echo "Add the $variable Actions secret." >&2; exit 1; }
           done
-          test "$(uname -m)" = arm64 || { echo "Release requires an Apple Silicon runner." >&2; exit 1; }
-      - name: Prepare version
+      - name: Prepare version once for all platforms
         id: version
         env:
           EXPECTED_SHA: ${{ github.sha }}
@@ -66,9 +56,82 @@ jobs:
             echo "This release already exists. Inspect or remove its draft before retrying." >&2
             exit 1
           fi
-      - name: Build release application
+      - name: Generate release notes
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          bun scripts/release-ci.js notes
+          cat docs/platform-support.md >> dist/RELEASE_NOTES.md
+      - name: Preserve versioned build inputs
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-inputs
+          path: |
+            Cargo.toml
+            Cargo.lock
+            package.json
+            apps/tendkit/macos/Info.plist
+            dist/RELEASE_NOTES.md
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-26
+            os: macos
+            arch: arm64
+          - runner: macos-15-intel
+            os: macos
+            arch: x64
+          - runner: windows-2025
+            os: windows
+            arch: x64
+          - runner: ubuntu-24.04
+            os: linux
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-inputs
+          path: .
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - name: Install stable Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+      - name: Install Linux build dependencies
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang cmake pkg-config protobuf-compiler libasound2-dev libclang-dev libfontconfig1-dev libfreetype6-dev libx11-xcb-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev libegl1-mesa-dev libzstd-dev libssl-dev libxcb-xfixes0-dev libxcb-shape0-dev libxcb-render0-dev libxrandr-dev libxi-dev
+      - name: Install Windows build dependencies
+        if: matrix.os == 'windows'
+        run: choco install protoc --yes --no-progress
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-${{ matrix.os }}-${{ matrix.arch }}
+      - name: Build macOS application
+        if: matrix.os == 'macos'
         run: bun run build
-      - name: Sign and notarize application
+      - name: Build Windows and Linux applications
+        if: matrix.os != 'macos'
+        run: cargo build --locked --release -p tendkit -p tendkit-engine
+      - name: Smoke test native engine protocol
+        run: bun scripts/smoke-engine.js
+      - name: Sign and notarize macOS application
+        if: matrix.os == 'macos'
         env:
           APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -76,46 +139,44 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: bash scripts/notarize-app.sh
-      - name: Generate release notes
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: bun scripts/release-ci.js notes
-      - name: Package application
-        env:
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
-        run: |
-          archive="TendKit-${RELEASE_TAG}-macos-arm64.zip"
-          ditto -c -k --sequesterRsrc --keepParent dist/TendKit.app "dist/$archive"
-          cd dist
-          shasum -a 256 "$archive" > SHA256SUMS.txt
-      - name: Preserve release artifacts
-        uses: actions/upload-artifact@v7
+      - name: Package native applications
+        run: bun scripts/package-release.js package
+      - uses: actions/upload-artifact@v7
         with:
-          name: release
+          name: release-${{ matrix.os }}-${{ matrix.arch }}
+          if-no-files-found: error
           path: |
-            dist/*.zip
-            dist/SHA256SUMS.txt
-            dist/RELEASE_NOTES.md
+            dist/TendKit-*.zip
+            dist/TendKit-*.tar.gz
+            dist/TendKit-*.deb
 
-  # Publishing needs no macOS tools, so it uses a Linux runner instead of
-  # waiting for another macOS one.
   publish:
-    needs: [test, build]
+    needs: [test, prepare, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_TAG: ${{ needs.build.outputs.tag }}
-      RELEASE_SHA: ${{ needs.build.outputs.sha }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
     steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
       - uses: actions/download-artifact@v8
         with:
-          name: release
+          name: release-inputs
+          path: .
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*-*
+          merge-multiple: true
           path: dist
+      - name: Verify platform matrix and generate combined checksums
+        run: bun scripts/package-release.js finalize
       - name: Publish GitHub release
         run: |
-          gh release create "$RELEASE_TAG" \
-            "dist/TendKit-${RELEASE_TAG}-macos-arm64.zip" dist/SHA256SUMS.txt \
+          gh release create "$RELEASE_TAG" dist/TendKit-*.zip dist/TendKit-*.tar.gz dist/TendKit-*.deb dist/SHA256SUMS.txt \
             --repo "$GITHUB_REPOSITORY" --target "$RELEASE_SHA" --title "TendKit ${RELEASE_TAG#v}" \
             --notes-file dist/RELEASE_NOTES.md --draft
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

@@ -25,7 +25,15 @@ pub fn curl(url: &str, destination: Option<&Path>, control: &Control, sink: &mut
     args.push("--silent".into());
   }
   args.push(url.into());
-  command(Path::new("/usr/bin/curl"), &args, control, sink, destination.is_some(), Duration::from_secs(610), &[])
+  command(
+    Path::new(if cfg!(windows) { "curl.exe" } else { "/usr/bin/curl" }),
+    &args,
+    control,
+    sink,
+    destination.is_some(),
+    Duration::from_secs(610),
+    &[],
+  )
 }
 
 pub fn get_json(url: &str, sink: &mut Sink) -> Result<serde_json::Value, String> {

@@ -5,6 +5,11 @@
 //! their own process groups, network downloads through `curl`, and the search
 //! directories used to find developer tools.
 
+#[cfg(unix)]
+mod command;
+
+#[cfg(windows)]
+#[path = "command_windows.rs"]
 mod command;
 mod control;
 mod environment;

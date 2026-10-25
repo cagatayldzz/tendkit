@@ -29,17 +29,17 @@ impl Workspace {
         let icon = match destination {
           Destination::AllTools => Icon::new(Lucide::Boxes),
           Destination::Installed => Icon::new(IconName::CircleCheck),
-          Destination::Updates => Icon::new(Lucide::CircleArrowDown),
-          Destination::Doctor => Icon::new(Lucide::Stethoscope),
+          Destination::Doctor => Icon::new(Lucide::Terminal),
+          Destination::Disk => Icon::new(Lucide::HardDrive),
           Destination::Settings => Icon::new(IconName::Settings),
         };
         SidebarMenuItem::new(destination.title())
           .icon(icon)
           .active(self.destination == destination)
           .on_click(cx.listener(move |this, _, _, cx| this.navigate(destination, cx)))
-          .when(!matches!(destination, Destination::Settings | Destination::Doctor), |item| {
+          .when(!matches!(destination, Destination::Settings | Destination::Doctor | Destination::Disk), |item| {
             item.suffix(move |_, _| {
-              let tag = if destination == Destination::Updates && count > 0 { Tag::warning() } else { Tag::secondary() };
+              let tag = Tag::secondary();
               tag.small().rounded_full().child(count.to_string())
             })
           })

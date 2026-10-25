@@ -4,6 +4,7 @@
 mod assets;
 mod catalog;
 mod components;
+mod disk;
 mod doctor;
 mod opencommit;
 mod plan;
@@ -62,30 +63,29 @@ fn apply_theme(window: &mut Window, cx: &mut App) {
 pub enum Destination {
   AllTools,
   Installed,
-  Updates,
   Doctor,
+  Disk,
   Settings,
 }
 
 impl Destination {
-  pub const ALL: [Self; 5] = [Self::AllTools, Self::Installed, Self::Updates, Self::Doctor, Self::Settings];
+  pub const ALL: [Self; 5] = [Self::AllTools, Self::Installed, Self::Doctor, Self::Disk, Self::Settings];
 
   pub fn title(self) -> String {
     t(match self {
       Self::AllTools => "nav.all_tools",
       Self::Installed => "nav.installed",
-      Self::Updates => "nav.updates",
       Self::Doctor => "nav.doctor",
+      Self::Disk => "disk.title",
       Self::Settings => "nav.settings",
     })
   }
 
-  pub fn includes(self, tool: &tendkit_model::ToolRow, model: &AppModel) -> bool {
+  pub fn includes(self, tool: &tendkit_model::ToolRow, _model: &AppModel) -> bool {
     match self {
       Self::AllTools | Self::Settings => true,
-      Self::Doctor => false,
+      Self::Doctor | Self::Disk => false,
       Self::Installed => tool.installed_version().is_some(),
-      Self::Updates => model.can_update(tool),
     }
   }
 }
@@ -101,6 +101,12 @@ pub struct Workspace {
   /// Bumped to reopen the settings on a chosen page, since the component keeps its own selection.
   settings_epoch: u64,
   settings_page: usize,
+  disk_visible: usize,
+  disk_search: Entity<InputState>,
+  disk_sort_name: bool,
+  disk_show_hidden: bool,
+  doctor_filter: Option<tendkit_model::DoctorSeverity>,
+  doctor_scope_expanded: bool,
   doctor_expanded: std::collections::HashSet<&'static str>,
   /// The release the user was last notified about, so each one is announced once.
   notified_update: Option<String>,
@@ -113,7 +119,14 @@ impl Workspace {
     cx.bind_keys([KeyBinding::new("up", SelectPrevious, Some(CONTEXT)), KeyBinding::new("down", SelectNext, Some(CONTEXT))]);
     apply_theme(window, cx);
     let search = cx.new(|cx| InputState::new(window, cx).placeholder(t("search.placeholder")));
+    let disk_search = cx.new(|cx| InputState::new(window, cx).placeholder(t("disk.search")));
     let subscriptions = vec![
+      cx.subscribe(&disk_search, |this, _, event: &InputEvent, cx| {
+        if matches!(event, InputEvent::Change) {
+          this.disk_visible = 100;
+          cx.notify();
+        }
+      }),
       cx.observe_window_appearance(window, |_, window, cx| apply_theme(window, cx)),
       cx.subscribe(&search, |_, _, event: &InputEvent, cx| {
         if matches!(event, InputEvent::Change) {
@@ -139,6 +152,12 @@ impl Workspace {
       latest_request: None,
       settings_epoch: 0,
       settings_page: 0,
+      disk_visible: 100,
+      disk_search,
+      disk_sort_name: false,
+      disk_show_hidden: true,
+      doctor_filter: None,
+      doctor_scope_expanded: false,
       doctor_expanded: std::collections::HashSet::new(),
       notified_update: None,
       focus_handle,
@@ -158,12 +177,14 @@ impl Workspace {
       .iter()
       .flat_map(|category| model.tools.iter().filter(move |t| t.category() == *category))
       .filter(|tool| {
-        self.destination.includes(tool, model) && (self.destination != Destination::AllTools || self.catalog_filter.includes(tool, model)) && {
-          query.is_empty() || {
-            let haystack = format!("{} {} {}", tool.name, tool.subtitle(), tool.primary().map(|i| i.source.as_str()).unwrap_or(""));
-            haystack.to_lowercase().contains(&query)
+        self.destination.includes(tool, model)
+          && (!matches!(self.destination, Destination::AllTools | Destination::Installed) || self.catalog_filter.includes(tool, model))
+          && {
+            query.is_empty() || {
+              let haystack = format!("{} {} {}", tool.name, tool.subtitle(), tool.primary().map(|i| i.source.as_str()).unwrap_or(""));
+              haystack.to_lowercase().contains(&query)
+            }
           }
-        }
       })
       .cloned()
       .collect()
@@ -193,6 +214,13 @@ impl Workspace {
   }
 
   fn navigate(&mut self, destination: Destination, cx: &mut Context<Self>) {
+    if destination == Destination::Disk && self.model.read(cx).disk.path.as_os_str().is_empty() {
+      let path = tendkit_storage::paths::home_dir();
+      self.model.update(cx, |model, cx| model.scan_disk(path, cx));
+    }
+    if self.destination != destination && matches!(destination, Destination::AllTools | Destination::Installed) {
+      self.catalog_filter = catalog::CatalogFilter::All;
+    }
     self.destination = destination;
     self.focused_tool = None;
     cx.notify();
@@ -205,7 +233,7 @@ impl Workspace {
 
   fn move_selection(&mut self, offset: isize, cx: &mut Context<Self>) {
     let ids: Vec<_> = self.visible_tools(cx).iter().map(|t| t.id).collect();
-    if ids.is_empty() || matches!(self.destination, Destination::Settings | Destination::Doctor) {
+    if ids.is_empty() || matches!(self.destination, Destination::Settings | Destination::Doctor | Destination::Disk) {
       return;
     }
     let index = self.focused_tool.and_then(|id| ids.iter().position(|i| *i == id));
@@ -237,7 +265,11 @@ impl Workspace {
     let subtitle = match self.destination {
       Destination::Settings => t("toolbar.preferences"),
       Destination::Doctor => t("doctor.subtitle"),
-      Destination::Updates => tf("toolbar.updates_available", &[("count", &self.visible_tools(cx).len().to_string())]),
+      Destination::Disk => t("disk.subtitle"),
+      Destination::Installed => tf(
+        "toolbar.installed_summary",
+        &[("installed", &self.visible_tools(cx).len().to_string()), ("updates", &self.model.read(cx).update_count().to_string())],
+      ),
       _ => tf("toolbar.tools_count", &[("count", &self.visible_tools(cx).len().to_string())]),
     };
     let busy = self.model.read(cx).busy();
@@ -261,9 +293,11 @@ impl Workspace {
             .child(div().text_size(px(11.)).line_height(px(13.)).text_color(theme.muted_foreground).child(subtitle)),
         )
         .child(div().flex_1())
-        .when(!matches!(self.destination, Destination::Settings | Destination::Doctor), |this| {
+        .when(!matches!(self.destination, Destination::Settings | Destination::Doctor | Destination::Disk), |this| {
           this
-            .child(div().w(px(220.)).child(Input::new(&self.search).small().prefix(component::Icon::new(IconName::Search).small()).cleanable(true)))
+            .child(div().w(px(220.)).child(
+              Input::new(&self.search).with_size(component::Size::Medium).prefix(component::Icon::new(IconName::Search).small()).cleanable(true),
+            ))
             .child(
               Button::new("scan-again")
                 .ghost()
@@ -284,9 +318,11 @@ impl Render for Workspace {
     let theme = cx.theme().clone();
     let content = if self.destination == Destination::Settings {
       self.render_settings(cx).into_any_element()
+    } else if self.destination == Destination::Disk {
+      self.render_disk(cx).into_any_element()
     } else if self.destination == Destination::Doctor {
       self.render_doctor(cx).into_any_element()
-    } else if self.destination == Destination::AllTools {
+    } else if matches!(self.destination, Destination::AllTools | Destination::Installed) {
       self.render_catalog(window, cx).into_any_element()
     } else {
       h_flex().size_full().child(self.render_tool_list(cx)).child(self.render_detail(window, cx)).into_any_element()

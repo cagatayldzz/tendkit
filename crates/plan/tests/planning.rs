@@ -45,9 +45,9 @@ fn manageability_follows_recipe_rules() {
   assert!(!manageable("node", &state));
   assert!(!manageable("bun", &state));
   assert!(!manageable("npm", &state));
-  assert!(manageable("opencommit", &state));
-  assert!(manageable("homebrew", &state));
-  assert!(manageable("codex", &state));
+  assert_eq!(manageable("opencommit", &state), cfg!(target_os = "macos"));
+  assert_eq!(manageable("homebrew", &state), cfg!(target_os = "macos"));
+  assert_eq!(manageable("codex", &state), cfg!(target_os = "macos"));
 }
 
 #[test]

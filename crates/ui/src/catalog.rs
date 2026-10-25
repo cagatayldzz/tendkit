@@ -1,6 +1,6 @@
 use super::{
   components::{caption, green, orange, selection_checkbox, status_tag, tool_icon, tool_tint},
-  Workspace,
+  Destination, Workspace,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -13,7 +13,7 @@ use gpui_kit::{
 };
 use std::collections::BTreeSet;
 use tendkit_i18n::{t, tf};
-use tendkit_model::{AppModel, ToolCategory, ToolRow};
+use tendkit_model::{AppModel, ToolCategory, ToolRow, UpdateStatus};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub(super) enum CatalogFilter {
@@ -39,6 +39,20 @@ impl Workspace {
   pub(super) fn render_catalog(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
     let theme = cx.theme().clone();
     if self.focused_tool.is_some_and(|id| self.visible_tools(cx).iter().any(|tool| tool.id == id)) {
+      if self.destination == Destination::Installed {
+        return v_flex()
+          .size_full()
+          .child(div().px_5().py_2().border_b_1().border_color(theme.border).child(
+            Button::new("back-to-installed").ghost().small().icon(IconName::ArrowLeft).label(t("catalog.back_installed")).on_click(cx.listener(
+              |this, _, _, cx| {
+                this.focused_tool = None;
+                cx.notify();
+              },
+            )),
+          ))
+          .child(h_flex().flex_1().min_h_0().w_full().child(self.render_tool_list(cx)).child(self.render_detail(window, cx)))
+          .into_any_element();
+      }
       return v_flex()
         .size_full()
         .child(div().px_5().pt_3().child(Button::new("back-to-catalog").ghost().small().icon(IconName::ArrowLeft).label(t("catalog.back")).on_click(
@@ -66,19 +80,22 @@ impl Workspace {
     let error = model.error.clone();
     let tools = self.visible_tools(cx);
 
-    let mut filters = h_flex().gap_2();
+    let mut filters = h_flex().gap_2().flex_wrap();
     for (filter, label) in [
       (CatalogFilter::All, "filter.all"),
       (CatalogFilter::Installed, "nav.installed"),
       (CatalogFilter::Updates, "nav.updates"),
       (CatalogFilter::NotInstalled, "status.not_installed"),
     ] {
+      if self.destination == Destination::Installed && matches!(filter, CatalogFilter::Installed | CatalogFilter::NotInstalled) {
+        continue;
+      }
       let active = self.catalog_filter == filter;
       filters = filters.child(
         Button::new(SharedString::from(format!("catalog-filter-{label}")))
           .ghost()
           .small()
-          .label(t(label))
+          .label(t(if self.destination == Destination::Installed && filter == CatalogFilter::All { "catalog.all_installed" } else { label }))
           .when(active, |button| button.bg(theme.blue.opacity(0.12)).text_color(theme.blue))
           .on_click(cx.listener(move |this, _, _, cx| {
             this.catalog_filter = filter;
@@ -89,11 +106,12 @@ impl Workspace {
 
     let mut body = v_flex()
       .w_full()
-      .max_w(px(1060.))
-      .p(px(26.))
-      .gap(px(24.))
+      .max_w(px(1200.))
+      .p_5()
+      .gap_4()
       .child(
         h_flex()
+          .flex_wrap()
           .gap_3()
           .child(self.stat_tile("nav.installed", format!("{installed}/{total}"), green(), CatalogFilter::Installed, cx))
           .child(self.stat_tile(
@@ -150,8 +168,19 @@ impl Workspace {
             )
           }),
       )
-      .child(filters);
+      .child(
+        h_flex()
+          .w_full()
+          .gap_2()
+          .flex_wrap()
+          .child(filters)
+          .child(div().flex_1())
+          .child(div().text_xs().text_color(theme.muted_foreground).child(tf("catalog.visible_count", &[("count", &tools.len().to_string())]))),
+      );
 
+    if !cfg!(target_os = "macos") {
+      body = body.child(Alert::info("platform-preview", t("platform.preview")));
+    }
     if let Some(error) = error {
       body = body.child(Alert::error("catalog-error", error));
     }
@@ -177,17 +206,9 @@ impl Workspace {
         continue;
       }
       let description = category.description();
-      // Equal-width flex rows avoid running the grid sizing algorithm on every scroll frame.
-      let mut cards = v_flex().gap_3();
-      for pair in members.chunks(2) {
-        let mut row = h_flex().items_stretch().gap_3();
-        for tool in pair {
-          row = row.child(div().flex_1().min_w_0().child(self.catalog_card(tool, cx)));
-        }
-        if pair.len() == 1 {
-          row = row.child(div().flex_1().min_w_0());
-        }
-        cards = cards.child(row);
+      let mut cards = v_flex().gap_2();
+      for tool in &members {
+        cards = cards.child(self.catalog_card(tool, cx));
       }
       body = body.child(
         v_flex()
@@ -198,7 +219,7 @@ impl Workspace {
               .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).child(category.title()))
               .child(div().text_size(px(11.)).text_color(theme.muted_foreground).child(format!("{}", members.len())))
               .child(div().flex_1())
-              .child(div().text_size(px(11.)).text_color(theme.muted_foreground).child(description)),
+              .child(div().text_size(px(11.)).text_color(theme.muted_foreground).truncate().child(description)),
           )
           .child(cards),
       );
@@ -218,18 +239,20 @@ impl Workspace {
     let selected = self.model.read(cx).selected.contains(id);
     let model = self.model.read(cx);
     let tag = status_tag(model, tool);
-    let version = tool.installed_version().map(|v| format!("v{v}"));
+    let version = match model.update_status(tool) {
+      Some(UpdateStatus::Available { installed, latest }) => format!("v{installed} → v{latest}"),
+      _ => tool.installed_version().map(|version| format!("v{version}")).unwrap_or_default(),
+    };
     let has_update = model.can_update(tool);
     let can_update = has_update && !model.busy();
 
-    v_flex()
+    h_flex()
       .id(SharedString::from(format!("catalog-{id}")))
       .w_full()
-      .h_full()
       .min_w_0()
-      .gap(px(14.))
-      .p(px(17.))
-      .rounded(px(14.))
+      .gap_3()
+      .p_3()
+      .rounded(px(10.))
       .border_1()
       .border_color(if selected {
         theme.blue.opacity(0.65)
@@ -238,34 +261,33 @@ impl Workspace {
       } else {
         theme.border
       })
-      .bg(if selected { theme.blue.opacity(0.06) } else { tint.opacity(0.025) })
-      .hover(move |style| style.bg(tint.opacity(0.07)).border_color(tint.opacity(0.4)))
+      .bg(if selected { theme.blue.opacity(0.06) } else { theme.background })
+      .hover(move |style| style.bg(tint.opacity(0.04)).border_color(tint.opacity(0.4)))
+      .child(selection_checkbox(&self.model, tool, false, cx))
+      .child(tool_icon(tool, 32., cx))
       .child(
-        h_flex()
-          .gap_3()
-          .child(tool_icon(tool, 38., cx))
-          .child(
-            v_flex()
-              .flex_1()
-              .min_w_0()
-              .gap_1()
-              .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).child(tool.name))
-              .child(div().text_size(px(11.)).text_color(theme.muted_foreground).child(tool.subtitle())),
-          )
-          .child(selection_checkbox(&self.model, tool, false, cx)),
+        v_flex()
+          .flex_1()
+          .min_w_0()
+          .gap_1()
+          .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).child(tool.name))
+          .child(div().text_xs().text_color(theme.muted_foreground).truncate().child(tool.subtitle())),
+      )
+      .child(
+        v_flex()
+          .gap_1()
+          .items_end()
+          .min_w(px(120.))
+          .child(tag)
+          .child(div().text_xs().text_color(if has_update { orange() } else { theme.muted_foreground }).child(version)),
       )
       .child(
         h_flex()
           .gap_2()
-          .pt_3()
-          .border_t_1()
-          .border_color(theme.border.opacity(0.6))
-          .child(tag)
-          .child(div().min_w_0().truncate().child(caption(version.unwrap_or_default(), cx)))
-          .child(div().flex_1())
-          .when(can_update, |this| {
+          .flex_none()
+          .when(can_update, |row| {
             let update_model = self.model.clone();
-            this.child(
+            row.child(
               Button::new(SharedString::from(format!("update-{id}")))
                 .primary()
                 .xsmall()
@@ -277,9 +299,9 @@ impl Workspace {
           .child(
             Button::new(SharedString::from(format!("details-{id}")))
               .ghost()
-              .xsmall()
+              .small()
               .label(t("action.details"))
-              .icon(IconName::ArrowRight)
+              .icon(IconName::ChevronRight)
               .accessibility_label(tf("action.details_accessibility", &[("name", tool.name)]))
               .on_click(cx.listener(move |this, _, _, cx| this.focus_tool(id, cx))),
           ),
@@ -290,10 +312,10 @@ impl Workspace {
   fn stat_tile(&self, label_key: &'static str, value: String, color: Hsla, filter: CatalogFilter, cx: &mut Context<Self>) -> impl IntoElement {
     let theme = cx.theme().clone();
     let active = self.catalog_filter == filter;
-    v_flex()
+    h_flex()
       .id(SharedString::from(format!("stat-{label_key}")))
       .flex_1()
-      .gap(px(4.))
+      .gap_3()
       .px_4()
       .py_3()
       .rounded(px(12.))
@@ -303,10 +325,13 @@ impl Workspace {
       .bg(if active { color.opacity(0.07) } else { theme.foreground.opacity(0.025) })
       .hover(move |style| style.bg(color.opacity(0.08)))
       .on_click(cx.listener(move |this, _, _, cx| {
+        if this.destination == Destination::Installed && filter == CatalogFilter::NotInstalled {
+          this.destination = Destination::AllTools;
+        }
         this.catalog_filter = if this.catalog_filter == filter { CatalogFilter::All } else { filter };
         cx.notify();
       }))
-      .child(div().text_size(px(22.)).font_weight(FontWeight::SEMIBOLD).text_color(color).child(value))
+      .child(div().text_size(px(20.)).font_weight(FontWeight::SEMIBOLD).text_color(color).child(value))
       .child(caption(t(label_key), cx))
   }
 }

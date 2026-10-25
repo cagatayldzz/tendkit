@@ -1,6 +1,6 @@
 use super::{
   components::{green, orange, selection_checkbox, tool_icon},
-  Destination, Workspace,
+  Workspace,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -23,7 +23,6 @@ impl Workspace {
     let searching = !self.query(cx).is_empty();
     let model = self.model.read(cx);
     let (scanning, scanned, installed, total) = (model.is_scanning, model.scanned_count(), model.installed_count(), model.tools.len());
-    let updating = self.destination == Destination::Updates;
     let updatable = model.updatable_ids().len();
     let busy = model.busy();
     // One line per tool: the version, or `installed → latest` when an update exists.
@@ -49,28 +48,10 @@ impl Workspace {
         .justify_center()
         .gap_2()
         .px_6()
-        .child(
-          if searching {
-            Icon::new(IconName::Search)
-          } else if updating {
-            Icon::new(IconName::CircleCheck)
-          } else {
-            Icon::new(Lucide::Boxes)
-          }
-          .size(px(32.))
-          .text_color(if updating && !searching { green() } else { theme.muted_foreground }),
-        )
-        .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).child(if searching {
-          t("list.no_results")
-        } else if updating {
-          t("list.up_to_date_title")
-        } else {
-          t("list.no_tools")
-        }))
+        .child(if searching { Icon::new(IconName::Search) } else { Icon::new(Lucide::Boxes) }.size(px(32.)).text_color(theme.muted_foreground))
+        .child(div().text_size(px(15.)).font_weight(FontWeight::SEMIBOLD).child(if searching { t("list.no_results") } else { t("list.no_tools") }))
         .child(div().text_size(px(12.)).text_center().text_color(theme.muted_foreground).child(if searching {
           t("list.no_results_hint")
-        } else if updating {
-          t("list.up_to_date_hint")
         } else {
           t("list.empty_hint")
         }))
@@ -136,11 +117,18 @@ impl Workspace {
             .child(div().flex_none().child(if scanning { Icon::new(IconName::RefreshCw) } else { Icon::new(Lucide::ShieldCheck) }.size(px(12.))))
             .child(div().flex_1().min_w_0().child(if scanning {
               tf("list.scanned", &[("scanned", &scanned.to_string()), ("total", &total.to_string())])
-            } else if updating {
-              tf("list.to_update", &[("count", &updatable.to_string())])
             } else {
               tf("statusbar.installed_count", &[("installed", &installed.to_string()), ("total", &total.to_string())])
             })),
+        )
+        .child(
+          Button::new("check-updates-list")
+            .ghost()
+            .small()
+            .w_full()
+            .label(t("action.check_updates"))
+            .disabled(busy || model.is_checking_updates())
+            .on_click(cx.listener(|this, _, _, cx| this.model.update(cx, |model, cx| model.check_all_latest(true, cx)))),
         )
         .when(updatable > 0, |this| {
           this.child(

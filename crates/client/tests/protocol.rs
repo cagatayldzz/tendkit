@@ -231,6 +231,12 @@ fn actual_rust_executor_accepts_current_plan_and_rejects_stale_plan() {
   };
   let mut events = Vec::new();
   let request = |version| Request::new("execute").configure_shell(false).plan(plan(version));
+  if !cfg!(target_os = "macos") {
+    let error = EngineConnection::new().run(&request("1.4.3"), Some(&wrapper), |_| {}).unwrap_err();
+    assert!(error.to_string().contains("macOS only"));
+    fs::remove_dir_all(&root).unwrap();
+    return;
+  }
   EngineConnection::new().run(&request("1.4.3"), Some(&wrapper), |e| events.push(e)).unwrap();
   let finished = events.iter().find(|e| e.kind == EventType::StepFinished).unwrap();
   assert_eq!(finished.data.status.as_deref(), Some("skipped"));
