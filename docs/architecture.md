@@ -192,3 +192,12 @@ parallel platform jobs → verify → publish. Platform jobs share the local
 of duplicating builds in a reusable CI workflow. Verification assembles all five
 packages, writes checksums, and uploads a single verified artifact for publication.
 Publish rechecks the hashes after download. Normal push/PR CI remains Ubuntu-only.
+
+## Icon generation
+
+`apps/tendkit-icon` is an independent development executable that renders
+`icon.svg` with resvg to a 1024×1024 PNG. `--dev` adds `badge.svg`; its lettering
+uses paths so rendering does not require system fonts. It has no dependencies
+on application or engine crates. Run `bun run icons` to build the renderer and
+regenerate both committed macOS icons. The packaging script still uses macOS
+`sips` and `iconutil` for resizing and ICNS packaging; Swift is not required.

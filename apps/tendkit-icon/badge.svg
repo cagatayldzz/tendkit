@@ -1,0 +1,7 @@
+<!-- Letter outlines keep the development badge independent of system fonts. -->
+<path d="M100,100 H500 L100,500 Z" fill="url(#orange)" filter="url(#badgeShadow)"/>
+<g transform="translate(239 239) rotate(-45) translate(-100 -35)" fill="white" fill-rule="evenodd">
+  <path d="M0,0 H27 C69,0 69,70 27,70 H0 Z M17,15 V55 H26 C44,55 44,15 26,15 Z"/>
+  <path d="M73,0 H125 V15 H90 V27 H120 V42 H90 V55 H125 V70 H73 Z"/>
+  <path d="M137,0 H156 L171,48 L186,0 H205 L181,70 H161 Z"/>
+</g>

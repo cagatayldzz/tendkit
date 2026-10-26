@@ -5,6 +5,7 @@ use gpui_kit::{
     alert::Alert,
     breadcrumb::{Breadcrumb, BreadcrumbItem},
     button::{Button, ButtonVariants},
+    checkbox::Checkbox,
     h_flex,
     input::Input,
     progress::Progress,
@@ -104,26 +105,30 @@ impl Workspace {
           .gap_2()
           .flex_wrap()
           .child(
-            div().flex_1().min_w(px(140.)).child(Input::new(&self.disk_search).small().prefix(Icon::new(IconName::Search).small()).cleanable(true)),
+            div()
+              .flex_1()
+              .min_w(px(140.))
+              .child(Input::new(&self.disk_search).with_size(component::Size::Medium).prefix(Icon::new(IconName::Search).small()).cleanable(true)),
           )
-          .child(Button::new("disk-sort").ghost().small().label(t(if self.disk_sort_name { "disk.sort_name" } else { "disk.sort_size" })).on_click(
-            cx.listener(|this, _, _, cx| {
-              this.disk_sort_name = !this.disk_sort_name;
-              this.disk_visible = 100;
-              cx.notify();
-            }),
-          ))
           .child(
-            Button::new("disk-hidden")
+            Button::new("disk-sort")
               .ghost()
               .small()
-              .label(t(if self.disk_show_hidden { "disk.hide_hidden" } else { "disk.show_hidden" }))
+              .icon(if self.disk_sort_name { Lucide::ArrowDownAZ } else { Lucide::ArrowDownWideNarrow })
+              .tooltip(t(if self.disk_sort_name { "disk.sort_name" } else { "disk.sort_size" }))
               .on_click(cx.listener(|this, _, _, cx| {
-                this.disk_show_hidden = !this.disk_show_hidden;
+                this.disk_sort_name = !this.disk_sort_name;
                 this.disk_visible = 100;
                 cx.notify();
               })),
-          ),
+          )
+          .child(Checkbox::new("disk-hidden").small().checked(self.disk_show_hidden).label(t("disk.show_hidden")).on_click(cx.listener(
+            |this, checked, _, cx| {
+              this.disk_show_hidden = *checked;
+              this.disk_visible = 100;
+              cx.notify();
+            },
+          ))),
       );
     header = header.when(scanning, |header| header.child(div().text_xs().text_color(theme.muted_foreground).child(t("disk.scanning"))));
     let mut list = v_flex().w_full().gap_0();

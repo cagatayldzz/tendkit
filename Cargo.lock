@@ -6239,6 +6239,13 @@ name = "tendkit-i18n"
 version = "0.1.0"
 
 [[package]]
+name = "tendkit-icon"
+version = "0.1.0"
+dependencies = [
+ "resvg 0.46.0",
+]
+
+[[package]]
 name = "tendkit-model"
 version = "0.1.0"
 dependencies = [

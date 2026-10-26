@@ -1,5 +1,5 @@
 #!/bin/bash
-# Regenerates apps/tendkit/macos/AppIcon.icns and AppIcon-dev.icns from scripts/make-icon.swift.
+# Regenerates apps/tendkit/macos/AppIcon.icns and AppIcon-dev.icns using the Rust SVG renderer.
 set -euo pipefail
 
 project_dir="$(cd "$(dirname "$0")/.." && pwd)"
@@ -7,10 +7,10 @@ resources="$project_dir/apps/tendkit/macos"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-# render <name> <output.icns> [make-icon.swift flags...]
+# render <name> <output.icns> [renderer flags...]
 render() {
   local name="$1" output="$2"; shift 2
-  swift "$project_dir/scripts/make-icon.swift" "$@" "$work/$name.png" >/dev/null
+  cargo run --quiet --locked --manifest-path "$project_dir/Cargo.toml" -p tendkit-icon -- "$@" "$work/$name.png" >/dev/null
   local iconset="$work/$name.iconset"
   mkdir -p "$iconset"
   for size in 16 32 128 256 512; do
