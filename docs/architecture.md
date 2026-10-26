@@ -201,3 +201,14 @@ uses paths so rendering does not require system fonts. It has no dependencies
 on application or engine crates. Run `bun run icons` to build the renderer and
 regenerate both committed macOS icons. The packaging script still uses macOS
 `sips` and `iconutil` for resizing and ICNS packaging; Swift is not required.
+
+## Disk exploration
+
+Development directory summaries are derived from the saved disk index when
+a folder is opened. Node dependencies (`node_modules`), Python environments
+(`.venv`), and Rust output (`target` beside an indexed `Cargo.toml`) are
+classified without additional filesystem access. Outermost recognized folders
+contribute their allocated sizes once, preventing nested dependency trees from
+being counted twice. Existing privacy exclusions and incomplete-scan semantics
+apply. Row context menus reveal items, copy paths, and open macOS Terminal at
+the folder (or a file's parent), passing paths directly as process arguments.

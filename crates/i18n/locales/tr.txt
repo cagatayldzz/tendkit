@@ -317,3 +317,15 @@ catalog.back_installed = Yüklü araçlara dön
 catalog.all_installed = Tüm yüklü araçlar
 catalog.visible_count = {count} araç gösteriliyor
 platform.preview = Windows ve Linux önizlemesi: araç inceleme, ortam kontrolleri ve disk indeksleme kullanılabilir. Araç kurulumu ve otomatik uygulama güncellemesi şu anda yalnızca macOS üzerinde desteklenir.
+
+disk.reveal = Finder’da göster
+disk.reveal_other = Dosya yöneticisinde göster
+disk.copy_path = Yolu kopyala
+disk.terminal = Terminal’de aç
+disk.action_error = Terminal açılamadı: {error}
+disk.developer_title = Bu klasördeki geliştirme dizinleri
+disk.developer_scope = Kayıtlı taramaya dayanır. İç içe eşleşmeler bir kez sayılır; eksik taramalarda boyutlar alt sınırdır. Kategoriler klasör adına göre belirlenir; Rust target için aynı dizinde Cargo.toml da gerekir.
+disk.developer_node = Node bağımlılıkları
+disk.developer_rust = Rust derleme çıktıları
+disk.developer_python = Python ortamları
+disk.developer_usage = {name}: {size} · {count} klasör

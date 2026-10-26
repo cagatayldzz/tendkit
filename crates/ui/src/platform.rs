@@ -118,3 +118,22 @@ pub fn language_name(code: &str) -> String {
 #[cfg(test)]
 #[path = "../tests/platform.rs"]
 mod tests;
+
+/// Launch Terminal at a directory without interpolating paths into shell code.
+pub fn open_terminal(path: &std::path::Path) -> std::io::Result<()> {
+  #[cfg(target_os = "macos")]
+  {
+    let output = Command::new("/usr/bin/open").args(["-a", "Terminal"]).arg(path).output()?;
+    if output.status.success() {
+      Ok(())
+    } else {
+      Err(std::io::Error::other(String::from_utf8_lossy(&output.stderr).trim().to_owned()))
+    }
+  }
+
+  #[cfg(not(target_os = "macos"))]
+  {
+    let _ = path;
+    Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "Opening Terminal is available on macOS only."))
+  }
+}

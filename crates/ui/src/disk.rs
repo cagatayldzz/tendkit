@@ -8,10 +8,12 @@ use gpui_kit::{
     checkbox::Checkbox,
     h_flex,
     input::Input,
+    menu::{ContextMenuExt, PopupMenuItem},
+    notification::Notification,
     progress::Progress,
     skeleton::Skeleton,
     tag::Tag,
-    v_flex, ActiveTheme, Disableable, Icon, IconName, Sizable,
+    v_flex, ActiveTheme, Disableable, Icon, IconName, Sizable, WindowExt,
   },
   *,
 };
@@ -130,6 +132,24 @@ impl Workspace {
             },
           ))),
       );
+    if disk.developer_usage.counts.iter().any(|count| *count > 0) {
+      let mut categories = h_flex().gap_2().flex_wrap();
+      for (kind, key) in ["disk.developer_node", "disk.developer_rust", "disk.developer_python"].iter().enumerate() {
+        if disk.developer_usage.counts[kind] > 0 {
+          categories = categories.child(Tag::secondary().small().child(tf(
+            "disk.developer_usage",
+            &[("name", &t(key)), ("size", &size(disk.developer_usage.bytes[kind])), ("count", &disk.developer_usage.counts[kind].to_string())],
+          )));
+        }
+      }
+      header = header.child(
+        v_flex()
+          .gap_2()
+          .child(div().text_sm().child(t("disk.developer_title")))
+          .child(categories)
+          .child(div().text_xs().text_color(theme.muted_foreground).child(t("disk.developer_scope"))),
+      );
+    }
     header = header.when(scanning, |header| header.child(div().text_xs().text_color(theme.muted_foreground).child(t("disk.scanning"))));
     let mut list = v_flex().w_full().gap_0();
     if scanning && disk.report.is_none() {
@@ -201,6 +221,9 @@ impl Workspace {
       );
       for (index, entry) in entries.iter().take(self.disk_visible).enumerate() {
         let path = entry.path.clone();
+        let menu_path = path.clone();
+        let terminal_path = if entry.directory { path.clone() } else { path.parent().unwrap_or(&path).to_path_buf() };
+        let developer_kind = disk.index.as_ref().and_then(|index| index.developer_kind(entry));
         let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
         let fraction = if total > 0 { entry.bytes as f32 / total as f32 * 100. } else { 0. };
         let clickable = entry.directory && !entry.excluded;
@@ -241,6 +264,9 @@ impl Workspace {
                 })))
               },
             ))
+            .when_some(developer_kind, |row, kind| {
+              row.child(Tag::secondary().small().child(t(["disk.developer_node", "disk.developer_rust", "disk.developer_python"][kind])))
+            })
             .child(
               v_flex()
                 .w(px(140.))
@@ -252,7 +278,28 @@ impl Workspace {
                 }))
                 .child(Progress::new(SharedString::from(format!("disk-share-{index}"))).small().value(fraction).accessibility_label(t("disk.share"))),
             )
-            .child(div().w(px(105.)).text_right().text_sm().child(if entry.excluded || !entry.measured { "—".into() } else { size(entry.bytes) })),
+            .child(div().w(px(105.)).text_right().text_sm().child(if entry.excluded || !entry.measured { "—".into() } else { size(entry.bytes) }))
+            .context_menu(move |menu, _, _| {
+              let reveal_path = menu_path.clone();
+              let copy_path = menu_path.clone();
+              let terminal_path = terminal_path.clone();
+              menu
+                .item(
+                  PopupMenuItem::new(t(if cfg!(target_os = "macos") { "disk.reveal" } else { "disk.reveal_other" }))
+                    .icon(Lucide::Folder)
+                    .on_click(move |_, _, cx| cx.reveal_path(&reveal_path)),
+                )
+                .item(PopupMenuItem::new(t("disk.copy_path")).icon(Lucide::Copy).on_click(move |_, _, cx| {
+                  cx.write_to_clipboard(ClipboardItem::new_string(copy_path.to_string_lossy().into_owned()));
+                }))
+                .item(PopupMenuItem::new(t("disk.terminal")).icon(Lucide::Terminal).disabled(!cfg!(target_os = "macos")).on_click(
+                  move |_, window, cx| {
+                    if let Err(error) = crate::platform::open_terminal(&terminal_path) {
+                      window.push_notification(Notification::error(tf("disk.action_error", &[("error", &error.to_string())])), cx);
+                    }
+                  },
+                ))
+            }),
         );
       }
       if entries.len() > self.disk_visible {

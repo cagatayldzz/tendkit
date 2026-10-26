@@ -32,6 +32,14 @@ pub struct DiskReport {
   pub partial: bool,
 }
 
+/// Allocated space in recognized development directories. Nested matches are
+/// counted only as part of their outermost recognized directory.
+#[derive(Clone, Debug, Default)]
+pub struct DeveloperUsage {
+  pub bytes: [u64; 3],
+  pub counts: [usize; 3],
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DiskIndex {
   version: u32,
@@ -44,6 +52,46 @@ pub struct DiskIndex {
 impl DiskIndex {
   pub fn report(&self, path: &Path) -> Option<&DiskReport> {
     self.reports.get(path)
+  }
+
+  /// Classify names using the saved index only; no filesystem probes are made.
+  pub fn developer_kind(&self, entry: &DiskEntry) -> Option<usize> {
+    if !entry.directory || entry.excluded || !entry.measured {
+      return None;
+    }
+    match entry.path.file_name()?.to_str()? {
+      "node_modules" => Some(0),
+      "target"
+        if self
+          .report(entry.path.parent()?)?
+          .entries
+          .iter()
+          .any(|sibling| sibling.path.file_name().is_some_and(|name| name == "Cargo.toml") && !sibling.directory) =>
+      {
+        Some(1)
+      }
+      ".venv" => Some(2),
+      _ => None,
+    }
+  }
+
+  pub fn developer_usage(&self, path: &Path) -> DeveloperUsage {
+    let mut usage = DeveloperUsage::default();
+    let matches: HashMap<_, _> = self
+      .reports
+      .values()
+      .flat_map(|report| &report.entries)
+      .filter(|entry| entry.path.starts_with(path))
+      .filter_map(|entry| self.developer_kind(entry).map(|kind| (entry.path.as_path(), (kind, entry.bytes))))
+      .collect();
+    for (entry_path, (kind, bytes)) in &matches {
+      let nested = entry_path.ancestors().skip(1).take_while(|ancestor| ancestor.starts_with(path)).any(|ancestor| matches.contains_key(ancestor));
+      if !nested {
+        usage.bytes[*kind] = usage.bytes[*kind].saturating_add(*bytes);
+        usage.counts[*kind] += 1;
+      }
+    }
+    usage
   }
 
   pub fn cache_path() -> PathBuf {

@@ -318,3 +318,15 @@ catalog.back_installed = Back to installed tools
 catalog.all_installed = All installed
 catalog.visible_count = {count} tools shown
 platform.preview = Windows and Linux preview: tool inspection, environment checks and disk indexing are available. Tool installation and automatic app updates are currently supported on macOS only.
+
+disk.reveal = Show in Finder
+disk.reveal_other = Show in File Manager
+disk.copy_path = Copy Path
+disk.terminal = Open in Terminal
+disk.action_error = Could not open Terminal: {error}
+disk.developer_title = Development directories in this folder
+disk.developer_scope = Based on the saved scan. Nested matches are counted once; incomplete scans show lower bounds. Categories are identified by folder names; Rust target also requires a sibling Cargo.toml.
+disk.developer_node = Node dependencies
+disk.developer_rust = Rust build output
+disk.developer_python = Python environments
+disk.developer_usage = {name}: {size} · {count} folders

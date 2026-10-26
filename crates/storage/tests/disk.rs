@@ -178,3 +178,39 @@ fn index_contains_empty_directories_and_marks_unvisited_children() {
   assert!(index.report(&nested).unwrap().entries.is_empty());
   assert!(index.report(&fixture.0).unwrap().entries[0].measured);
 }
+
+#[test]
+fn developer_usage_uses_indexed_markers_and_does_not_count_nested_folders_twice() {
+  let fixture = Fixture::new();
+  for directory in ["project/node_modules/package/node_modules", "project/target", "project/.venv", "unrelated/target"] {
+    fs::create_dir_all(fixture.0.join(directory)).unwrap();
+    fs::write(fixture.0.join(directory).join("data"), vec![1; 8192]).unwrap();
+  }
+  fs::write(fixture.0.join("project/Cargo.toml"), b"[package]").unwrap();
+  let index = index_with_home(&fixture.0, &AtomicBool::new(false), fixture.0.clone()).unwrap();
+  let usage = index.developer_usage(&fixture.0);
+  assert_eq!(usage.counts, [1, 1, 1]);
+  let project = index.report(&fixture.0.join("project")).unwrap();
+  for (kind, name) in ["node_modules", "target", ".venv"].iter().enumerate() {
+    let entry = project.entries.iter().find(|entry| entry.path.ends_with(name)).unwrap();
+    assert_eq!(usage.bytes[kind], entry.bytes);
+  }
+  assert_eq!(index.developer_usage(&fixture.0.join("unrelated")).counts, [0, 0, 0]);
+  // Classification remains available after the original folders disappear.
+  fs::remove_dir_all(fixture.0.join("project")).unwrap();
+  assert_eq!(index.developer_usage(&fixture.0).counts, [1, 1, 1]);
+}
+
+#[test]
+fn developer_usage_ignores_unmeasured_and_excluded_directories() {
+  let fixture = Fixture::new();
+  fs::create_dir(fixture.0.join("node_modules")).unwrap();
+  let mut index = index_with_home(&fixture.0, &AtomicBool::new(false), fixture.0.clone()).unwrap();
+  let report = index.reports.get_mut(&fixture.0).unwrap();
+  report.entries[0].measured = false;
+  assert_eq!(index.developer_usage(&fixture.0).counts, [0, 0, 0]);
+  let report = index.reports.get_mut(&fixture.0).unwrap();
+  report.entries[0].measured = true;
+  report.entries[0].excluded = true;
+  assert_eq!(index.developer_usage(&fixture.0).counts, [0, 0, 0]);
+}

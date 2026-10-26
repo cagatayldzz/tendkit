@@ -7,11 +7,12 @@ use std::{
     Arc,
   },
 };
-use tendkit_storage::disk::{index_disk, DiskIndex};
+use tendkit_storage::disk::{index_disk, DeveloperUsage, DiskIndex};
 
 #[derive(Default)]
 pub struct DiskState {
   pub path: PathBuf,
+  pub developer_usage: DeveloperUsage,
   pub report: Option<DiskReport>,
   pub scanning: bool,
   pub error: Option<String>,
@@ -24,6 +25,7 @@ impl AppModel {
   /// Open an indexed folder without touching the filesystem or starting a scan.
   pub fn browse_disk(&mut self, path: PathBuf, cx: &mut Context<Self>) {
     self.disk.report = self.disk.index.as_ref().and_then(|index| index.report(&path)).cloned();
+    self.disk.developer_usage = self.disk.index.as_ref().map(|index| index.developer_usage(&path)).unwrap_or_default();
     self.disk.path = path;
     self.disk.error = None;
     cx.notify();
@@ -76,6 +78,7 @@ impl AppModel {
         match result {
           Ok((index, cache_error)) => {
             model.disk.cache_error = cache_error;
+            model.disk.developer_usage = index.developer_usage(&model.disk.path);
             model.disk.report = index.report(&model.disk.path).cloned();
             model.disk.index = Some(index);
           }
