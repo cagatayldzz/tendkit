@@ -21,7 +21,7 @@ use gpui_kit_assets::IconName as Lucide;
 use std::path::PathBuf;
 use tendkit_i18n::{t, tf};
 
-fn size(bytes: u64) -> String {
+pub(super) fn size(bytes: u64) -> String {
   let units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
   let mut value = bytes as f64;
   let mut unit = 0;
@@ -84,6 +84,17 @@ impl Workspace {
             }),
           ))
           .child(div().flex_1().min_w_0().overflow_hidden().child(crumbs))
+          .when(cfg!(target_os = "macos"), |row| {
+            row.child(
+              Button::new("disk-cleanup")
+                .ghost()
+                .small()
+                .icon(Lucide::Trash)
+                .label(t("cleanup.open"))
+                .disabled(scanning || disk.index.is_none() || self.model.read(cx).busy())
+                .on_click(cx.listener(|this, _, window, cx| this.open_disk_cleanup(window, cx))),
+            )
+          })
           .child(if scanning {
             Button::new("disk-stop")
               .ghost()
@@ -166,6 +177,9 @@ impl Workspace {
     }
     if disk.cache_error {
       list = list.child(div().px_5().py_2().text_xs().child(t("disk.cache_error")));
+    }
+    if !scanning && disk.index.is_none() && disk.error.is_none() {
+      list = list.child(div().p_5().text_sm().child(t("cleanup.rescan")));
     }
     if !scanning && disk.index.is_some() && disk.report.is_none() {
       list = list.child(div().p_5().text_sm().child(t("disk.not_indexed")));

@@ -12,9 +12,16 @@ fn doctor_icons_are_embedded_in_the_application() {
 
 #[test]
 fn disk_icon_is_embedded_in_the_application() {
-  for icon in
-    [IconName::HardDrive, IconName::House, IconName::Folder, IconName::File, IconName::Terminal, IconName::ArrowDownAZ, IconName::ArrowDownWideNarrow]
-  {
+  for icon in [
+    IconName::HardDrive,
+    IconName::House,
+    IconName::Folder,
+    IconName::File,
+    IconName::Terminal,
+    IconName::ArrowDownAZ,
+    IconName::ArrowDownWideNarrow,
+    IconName::Trash,
+  ] {
     assert!(Assets.load(&icon.path()).unwrap().is_some());
   }
 }

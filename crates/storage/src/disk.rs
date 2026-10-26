@@ -94,6 +94,31 @@ impl DiskIndex {
     usage
   }
 
+  /// Proposals from indexed locations only. Live validation is required before use.
+  pub fn cleanup_proposals(&self) -> Vec<crate::cleanup::CleanupCandidate> {
+    let mut proposals = Vec::new();
+    for report in self.reports.values() {
+      for entry in &report.entries {
+        if !entry.directory || !entry.measured || entry.excluded || entry.bytes == 0 || !entry.path.starts_with(&self.home) {
+          continue;
+        }
+        let kind = if entry.path == self.home.join(".bun/install/cache") {
+          Some(crate::cleanup::CleanupKind::BunCache)
+        } else {
+          self.developer_kind(entry).map(|kind| match kind {
+            0 => crate::cleanup::CleanupKind::NodeModules,
+            1 => crate::cleanup::CleanupKind::RustTarget,
+            _ => crate::cleanup::CleanupKind::PythonEnvironment,
+          })
+        };
+        if let Some(kind) = kind {
+          proposals.push(crate::cleanup::CleanupCandidate::new(entry.path.clone(), entry.bytes, kind));
+        }
+      }
+    }
+    proposals
+  }
+
   pub fn cache_path() -> PathBuf {
     crate::paths::support_dir().join("disk-index.json")
   }

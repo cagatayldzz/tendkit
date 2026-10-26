@@ -212,3 +212,29 @@ contribute their allocated sizes once, preventing nested dependency trees from
 being counted twice. Existing privacy exclusions and incomplete-scan semantics
 apply. Row context menus reveal items, copy paths, and open macOS Terminal at
 the folder (or a file's parent), passing paths directly as process arguments.
+
+## Reviewed disk cleanup
+
+The macOS disk toolbar opens a review dialog populated only from indexed
+locations inside the current user's home. `storage::cleanup` validates paths
+and project markers on a background task, captures directory identity, and
+revalidates immediately before each move. It excludes protected personal
+folders, hidden tool roots (except the exact Bun package cache), VCS data,
+symlinks and symlinked ancestors. Nested proposals are collapsed to avoid
+overlapping moves. No new disk locations are scanned for cleanup.
+
+Bun's `.bun/install/cache` and Rust `target` directories with a sibling
+`Cargo.toml` and a valid `CACHEDIR.TAG` are recommended and preselected.
+`node_modules` beside `package.json` and `.venv` with `pyvenv.cfg` require
+manual selection because removing them can disrupt project environments.
+Displayed sizes are estimates from the saved scan; users should stop builds
+and package installations before moving items.
+
+The UI platform module calls Foundation's `NSFileManager` Trash API directly
+through `objc2-foundation`. It never falls back to permanent deletion. The
+move runs in the background, reports success or failure per item, and locks
+selection while running. Persistent disk sizes are invalidated before the
+first move; the in-memory index is discarded afterward, including on partial
+failure. A new scan is required to display current sizes. Moving to Trash
+does not itself free disk space. Validation tests inject a fake Trash backend
+and never move real development tools or user files.

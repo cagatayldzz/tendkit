@@ -29,6 +29,7 @@ gpui_kit_assets::icon_assets!(
     Copy,
     TriangleAlert,
     Terminal,
+    Trash,
     Wrench,
     X,
     Zap

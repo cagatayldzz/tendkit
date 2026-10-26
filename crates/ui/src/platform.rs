@@ -137,3 +137,21 @@ pub fn open_terminal(path: &std::path::Path) -> std::io::Result<()> {
     Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "Opening Terminal is available on macOS only."))
   }
 }
+
+/// Use the operating system Trash; never fall back to permanent removal.
+pub fn trash_directory(path: &std::path::Path) -> Result<(), String> {
+  #[cfg(target_os = "macos")]
+  {
+    use objc2_foundation::{NSFileManager, NSString, NSURL};
+
+    let path = path.to_str().ok_or("The path is not valid Unicode.")?;
+    let url = NSURL::fileURLWithPath_isDirectory(&NSString::from_str(path), true);
+    NSFileManager::defaultManager().trashItemAtURL_resultingItemURL_error(&url, None).map_err(|error| error.to_string())
+  }
+
+  #[cfg(not(target_os = "macos"))]
+  {
+    let _ = path;
+    Err("Moving cleanup items to Trash is available on macOS only.".into())
+  }
+}

@@ -91,6 +91,14 @@ impl AppModel {
     cx.notify();
   }
 
+  /// A cleanup changes ancestor sizes, so discard the entire in-memory snapshot.
+  pub fn invalidate_disk_index(&mut self, cx: &mut Context<Self>) {
+    self.disk.index = None;
+    self.disk.report = None;
+    self.disk.developer_usage = DeveloperUsage::default();
+    cx.notify();
+  }
+
   pub fn cancel_disk(&self) {
     self.disk.cancel.store(true, Ordering::Relaxed);
   }

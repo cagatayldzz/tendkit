@@ -12,7 +12,7 @@ description = "TendKit interface views built with GPUI Kit"
 
 [package.metadata.layers]
 # Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["tendkit-i18n", "tendkit-model", "tendkit-protocol", "tendkit-storage", "tendkit-updater", "gpui-kit", "gpui-kit-assets", "libc"]
+dependencies = ["tendkit-i18n", "tendkit-model", "tendkit-protocol", "tendkit-storage", "tendkit-updater", "gpui-kit", "gpui-kit-assets", "libc", "objc2-foundation"]
 
 [lints]
 workspace = true
@@ -29,3 +29,6 @@ tendkit-updater.workspace = true
 gpui-kit.workspace = true
 gpui-kit-assets.workspace = true
 libc.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSFileManager", "NSURL", "NSString", "NSError"] }

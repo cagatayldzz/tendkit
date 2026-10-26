@@ -6305,6 +6305,7 @@ dependencies = [
  "gpui-kit",
  "gpui-kit-assets",
  "libc",
+ "objc2-foundation 0.3.2",
  "tendkit-i18n",
  "tendkit-model",
  "tendkit-protocol",

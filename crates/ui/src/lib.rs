@@ -5,6 +5,7 @@ mod assets;
 mod catalog;
 mod components;
 mod disk;
+mod disk_cleanup;
 mod doctor;
 mod opencommit;
 mod plan;
