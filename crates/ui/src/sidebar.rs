@@ -31,13 +31,14 @@ impl Workspace {
           Destination::Installed => Icon::new(IconName::CircleCheck),
           Destination::Doctor => Icon::new(Lucide::Terminal),
           Destination::Disk => Icon::new(Lucide::HardDrive),
+          Destination::Applications => Icon::new(Lucide::AppWindow),
           Destination::Settings => Icon::new(IconName::Settings),
         };
         SidebarMenuItem::new(destination.title())
           .icon(icon)
           .active(self.destination == destination)
           .on_click(cx.listener(move |this, _, _, cx| this.navigate(destination, cx)))
-          .when(!matches!(destination, Destination::Settings | Destination::Doctor | Destination::Disk), |item| {
+          .when(!matches!(destination, Destination::Settings | Destination::Doctor | Destination::Disk | Destination::Applications), |item| {
             item.suffix(move |_, _| {
               let tag = Tag::secondary();
               tag.small().rounded_full().child(count.to_string())

@@ -6,6 +6,7 @@ use std::borrow::Cow;
 gpui_kit_assets::icon_assets!(
   AppIcons,
   [
+    AppWindow,
     ArrowDownAZ,
     ArrowDownWideNarrow,
     Boxes,

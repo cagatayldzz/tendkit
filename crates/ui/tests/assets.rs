@@ -21,6 +21,7 @@ fn disk_icon_is_embedded_in_the_application() {
     IconName::ArrowDownAZ,
     IconName::ArrowDownWideNarrow,
     IconName::Trash,
+    IconName::AppWindow,
   ] {
     assert!(Assets.load(&icon.path()).unwrap().is_some());
   }

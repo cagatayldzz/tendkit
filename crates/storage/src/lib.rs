@@ -2,6 +2,7 @@
 //! window size, app settings, and the OpenCommit files TendKit edits.
 
 mod app_settings;
+pub mod applications;
 pub mod cleanup;
 pub mod disk;
 mod fs_util;

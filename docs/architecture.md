@@ -238,3 +238,25 @@ first move; the in-memory index is discarded afterward, including on partial
 failure. A new scan is required to display current sizes. Moving to Trash
 does not itself free disk space. Validation tests inject a fake Trash backend
 and never move real development tools or user files.
+
+## Application management
+
+The Applications destination owns a separate UI entity with its search, filters,
+scan and removal status. `storage::applications` inventories app bundles in
+`/Applications`, `~/Applications`, `/System/Applications` and
+`/System/Library/CoreServices/Applications`, searching up to three levels of
+subfolders without descending into bundle helpers. This inventory is separate
+from the privacy-restricted disk index. It reads bounded `Info.plist` files
+through macOS `plutil` and measures allocated bundle sizes without following
+symlinks, with time and entry limits. Unknown sizes remain unknown.
+
+System locations and protected filesystem flags prevent removal. Symlinked
+or invalid bundles and the running copy of TendKit are also blocked. Removal
+requires review of one bundle, revalidates the allowed application roots and
+directory/metadata identity, and checks running GUI applications again through
+AppKit before using the existing Foundation Trash API. It never elevates
+privileges or bypasses macOS protection. Failures remain visible with Finder
+available for inspection. Only the reviewed bundle is moved; user documents,
+preferences, services and extensions are left to the application's own
+uninstaller. Tests use temporary fixtures and an injected Trash backend, never
+removing installed applications.

@@ -1,6 +1,7 @@
 //! The TendKit interface: the workspace window content, its views, and the
 //! application-level actions, built with GPUI Kit.
 
+mod applications;
 mod assets;
 mod catalog;
 mod components;
@@ -66,11 +67,12 @@ pub enum Destination {
   Installed,
   Doctor,
   Disk,
+  Applications,
   Settings,
 }
 
 impl Destination {
-  pub const ALL: [Self; 5] = [Self::AllTools, Self::Installed, Self::Doctor, Self::Disk, Self::Settings];
+  pub const ALL: [Self; 6] = [Self::AllTools, Self::Installed, Self::Doctor, Self::Disk, Self::Applications, Self::Settings];
 
   pub fn title(self) -> String {
     t(match self {
@@ -78,6 +80,7 @@ impl Destination {
       Self::Installed => "nav.installed",
       Self::Doctor => "nav.doctor",
       Self::Disk => "disk.title",
+      Self::Applications => "apps.title",
       Self::Settings => "nav.settings",
     })
   }
@@ -85,7 +88,7 @@ impl Destination {
   pub fn includes(self, tool: &tendkit_model::ToolRow, _model: &AppModel) -> bool {
     match self {
       Self::AllTools | Self::Settings => true,
-      Self::Doctor | Self::Disk => false,
+      Self::Doctor | Self::Disk | Self::Applications => false,
       Self::Installed => tool.installed_version().is_some(),
     }
   }
@@ -94,6 +97,7 @@ impl Destination {
 pub struct Workspace {
   model: Entity<AppModel>,
   destination: Destination,
+  applications: Entity<applications::ApplicationsPage>,
   catalog_filter: catalog::CatalogFilter,
   search: Entity<InputState>,
   focused_tool: Option<&'static str>,
@@ -119,6 +123,7 @@ impl Workspace {
   pub fn new(model: Entity<AppModel>, window: &mut Window, cx: &mut Context<Self>) -> Self {
     cx.bind_keys([KeyBinding::new("up", SelectPrevious, Some(CONTEXT)), KeyBinding::new("down", SelectNext, Some(CONTEXT))]);
     apply_theme(window, cx);
+    let applications = cx.new(|cx| applications::ApplicationsPage::new(model.clone(), window, cx));
     let search = cx.new(|cx| InputState::new(window, cx).placeholder(t("search.placeholder")));
     let disk_search = cx.new(|cx| InputState::new(window, cx).placeholder(t("disk.search")));
     let subscriptions = vec![
@@ -147,6 +152,7 @@ impl Workspace {
     Self {
       model,
       destination: Destination::AllTools,
+      applications,
       catalog_filter: catalog::CatalogFilter::default(),
       search,
       focused_tool: None,
@@ -215,6 +221,9 @@ impl Workspace {
   }
 
   fn navigate(&mut self, destination: Destination, cx: &mut Context<Self>) {
+    if destination == Destination::Applications {
+      self.applications.update(cx, |page, cx| page.ensure_loaded(cx));
+    }
     if destination == Destination::Disk && self.model.read(cx).disk.path.as_os_str().is_empty() {
       let path = tendkit_storage::paths::home_dir();
       self.model.update(cx, |model, cx| model.scan_disk(path, cx));
@@ -234,7 +243,7 @@ impl Workspace {
 
   fn move_selection(&mut self, offset: isize, cx: &mut Context<Self>) {
     let ids: Vec<_> = self.visible_tools(cx).iter().map(|t| t.id).collect();
-    if ids.is_empty() || matches!(self.destination, Destination::Settings | Destination::Doctor | Destination::Disk) {
+    if ids.is_empty() || matches!(self.destination, Destination::Settings | Destination::Doctor | Destination::Disk | Destination::Applications) {
       return;
     }
     let index = self.focused_tool.and_then(|id| ids.iter().position(|i| *i == id));
@@ -267,6 +276,7 @@ impl Workspace {
       Destination::Settings => t("toolbar.preferences"),
       Destination::Doctor => t("doctor.subtitle"),
       Destination::Disk => t("disk.subtitle"),
+      Destination::Applications => t("apps.subtitle"),
       Destination::Installed => tf(
         "toolbar.installed_summary",
         &[("installed", &self.visible_tools(cx).len().to_string()), ("updates", &self.model.read(cx).update_count().to_string())],
@@ -294,7 +304,7 @@ impl Workspace {
             .child(div().text_size(px(11.)).line_height(px(13.)).text_color(theme.muted_foreground).child(subtitle)),
         )
         .child(div().flex_1())
-        .when(!matches!(self.destination, Destination::Settings | Destination::Doctor | Destination::Disk), |this| {
+        .when(!matches!(self.destination, Destination::Settings | Destination::Doctor | Destination::Disk | Destination::Applications), |this| {
           this
             .child(div().w(px(220.)).child(
               Input::new(&self.search).with_size(component::Size::Medium).prefix(component::Icon::new(IconName::Search).small()).cleanable(true),
@@ -319,6 +329,8 @@ impl Render for Workspace {
     let theme = cx.theme().clone();
     let content = if self.destination == Destination::Settings {
       self.render_settings(cx).into_any_element()
+    } else if self.destination == Destination::Applications {
+      self.applications.clone().into_any_element()
     } else if self.destination == Destination::Disk {
       self.render_disk(cx).into_any_element()
     } else if self.destination == Destination::Doctor {

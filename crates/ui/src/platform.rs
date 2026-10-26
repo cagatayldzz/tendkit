@@ -155,3 +155,32 @@ pub fn trash_directory(path: &std::path::Path) -> Result<(), String> {
     Err("Moving cleanup items to Trash is available on macOS only.".into())
   }
 }
+
+/// Snapshot running GUI application bundles; refresh again before a Trash move.
+pub fn running_application_paths() -> std::collections::HashSet<std::path::PathBuf> {
+  #[cfg(target_os = "macos")]
+  {
+    use objc2_app_kit::NSWorkspace;
+
+    NSWorkspace::sharedWorkspace()
+      .runningApplications()
+      .iter()
+      .filter(|app| !app.isTerminated())
+      .filter_map(|app| app.bundleURL().and_then(|url| url.path()))
+      .map(|path| std::path::PathBuf::from(path.to_string()))
+      .map(|path| std::fs::canonicalize(&path).unwrap_or(path))
+      .collect()
+  }
+
+  #[cfg(not(target_os = "macos"))]
+  {
+    std::collections::HashSet::new()
+  }
+}
+
+pub fn trash_application(path: &std::path::Path) -> Result<(), String> {
+  if running_application_paths().contains(path) {
+    return Err("Quit this application before moving it to Trash.".into());
+  }
+  trash_directory(path)
+}
