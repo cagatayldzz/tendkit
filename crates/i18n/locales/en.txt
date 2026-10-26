@@ -2,7 +2,7 @@
 # Format: key = value. "{name}" marks a placeholder; "\n" is a line break.
 
 test.greeting = Hello, {name}
-nav.all_tools = All Tools
+nav.tools = Tools
 nav.installed = Installed
 nav.updates = Updates
 nav.settings = Settings
@@ -388,3 +388,13 @@ apps.help = Apple’s Guide
 apps.incomplete = Some locations could not be read or the scan limit was reached. The list may be incomplete.
 apps.scanning = Reading application bundles and sizes…
 apps.unsupported = Application management is currently available on macOS only.
+apps.filter_count = {name} · {count}
+apps.visible_count = {count} apps shown
+apps.about = About this list
+apps.clear_search = Clear Search
+apps.search_all = Search All Applications
+apps.application = Application
+apps.cpu = CPU
+apps.ram = RAM
+apps.usage_note = Resource usage refreshes every 2 seconds while this page is open. CPU is sampled between refreshes; 100% means one CPU core. RAM is summed resident memory (RSS), including matched helper processes and descendants; shared pages can be counted more than once. Unavailable readings show —.
+apps.usage_unavailable = Resource usage is unavailable: {error}

@@ -1,6 +1,6 @@
 use super::{
   components::{caption, green, orange, selection_checkbox, status_tag, tool_icon, tool_tint},
-  Destination, Workspace,
+  Workspace,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -39,20 +39,6 @@ impl Workspace {
   pub(super) fn render_catalog(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
     let theme = cx.theme().clone();
     if self.focused_tool.is_some_and(|id| self.visible_tools(cx).iter().any(|tool| tool.id == id)) {
-      if self.destination == Destination::Installed {
-        return v_flex()
-          .size_full()
-          .child(div().px_5().py_2().border_b_1().border_color(theme.border).child(
-            Button::new("back-to-installed").ghost().small().icon(IconName::ArrowLeft).label(t("catalog.back_installed")).on_click(cx.listener(
-              |this, _, _, cx| {
-                this.focused_tool = None;
-                cx.notify();
-              },
-            )),
-          ))
-          .child(h_flex().flex_1().min_h_0().w_full().child(self.render_tool_list(cx)).child(self.render_detail(window, cx)))
-          .into_any_element();
-      }
       return v_flex()
         .size_full()
         .child(div().px_5().pt_3().child(Button::new("back-to-catalog").ghost().small().icon(IconName::ArrowLeft).label(t("catalog.back")).on_click(
@@ -87,15 +73,12 @@ impl Workspace {
       (CatalogFilter::Updates, "nav.updates"),
       (CatalogFilter::NotInstalled, "status.not_installed"),
     ] {
-      if self.destination == Destination::Installed && matches!(filter, CatalogFilter::Installed | CatalogFilter::NotInstalled) {
-        continue;
-      }
       let active = self.catalog_filter == filter;
       filters = filters.child(
         Button::new(SharedString::from(format!("catalog-filter-{label}")))
           .ghost()
           .small()
-          .label(t(if self.destination == Destination::Installed && filter == CatalogFilter::All { "catalog.all_installed" } else { label }))
+          .label(t(label))
           .when(active, |button| button.bg(theme.blue.opacity(0.12)).text_color(theme.blue))
           .on_click(cx.listener(move |this, _, _, cx| {
             this.catalog_filter = filter;
@@ -325,9 +308,6 @@ impl Workspace {
       .bg(if active { color.opacity(0.07) } else { theme.foreground.opacity(0.025) })
       .hover(move |style| style.bg(color.opacity(0.08)))
       .on_click(cx.listener(move |this, _, _, cx| {
-        if this.destination == Destination::Installed && filter == CatalogFilter::NotInstalled {
-          this.destination = Destination::AllTools;
-        }
         this.catalog_filter = if this.catalog_filter == filter { CatalogFilter::All } else { filter };
         cx.notify();
       }))

@@ -260,3 +260,15 @@ available for inspection. Only the reviewed bundle is moved; user documents,
 preferences, services and extensions are left to the application's own
 uninstaller. Tests use temporary fixtures and an injected Trash backend, never
 removing installed applications.
+
+Application resource usage is sampled in the background every two seconds while
+the Applications destination is active. Leaving the page cancels its sampling
+task. The sampler reads PID, parent PID, process start time, cumulative CPU
+time, RSS and executable path from macOS `ps`, without reading process arguments
+or environment variables. Executables inside a bundle and matched descendants
+are grouped by application; explicit bundle matches take precedence over
+parentage. Bundle aliases are resolved for matching. CPU uses deltas between
+successive samples (100% represents one core), with PID reuse detected through
+start times. RAM sums RSS, so shared pages can be counted more than once.
+First CPU samples and unavailable readings remain unknown. Tests use synthetic
+process snapshots and do not inspect or alter real applications.

@@ -1,7 +1,7 @@
 # Turkish. Keep the same keys and placeholders as en.txt.
 
 test.greeting = Merhaba, {name}
-nav.all_tools = Tüm Araçlar
+nav.tools = Araçlar
 nav.installed = Yüklü
 nav.updates = Güncellemeler
 nav.settings = Ayarlar
@@ -387,3 +387,13 @@ apps.help = Apple Rehberi
 apps.incomplete = Bazı konumlar okunamadı veya tarama sınırına ulaşıldı. Liste eksik olabilir.
 apps.scanning = Uygulama paketleri ve boyutları okunuyor…
 apps.unsupported = Uygulama yönetimi şu anda yalnızca macOS’te kullanılabilir.
+apps.filter_count = {name} · {count}
+apps.visible_count = {count} uygulama gösteriliyor
+apps.about = Bu liste hakkında
+apps.clear_search = Aramayı Temizle
+apps.search_all = Tüm Uygulamalarda Ara
+apps.application = Uygulama
+apps.cpu = CPU
+apps.ram = RAM
+apps.usage_note = Bu sayfa açıkken kaynak kullanımı 2 saniyede bir yenilenir. CPU, ölçümler arasındaki kullanımdır; %100 bir CPU çekirdeğine karşılık gelir. RAM, eşleştirilen yardımcı ve alt süreçlerin yerleşik belleği (RSS) toplamıdır; paylaşılan sayfalar birden fazla sayılabilir. Alınamayan değerler — ile gösterilir.
+apps.usage_unavailable = Kaynak kullanımı alınamadı: {error}

@@ -1,6 +1,7 @@
 //! The TendKit interface: the workspace window content, its views, and the
 //! application-level actions, built with GPUI Kit.
 
+mod application_usage;
 mod applications;
 mod assets;
 mod catalog;
@@ -63,8 +64,7 @@ fn apply_theme(window: &mut Window, cx: &mut App) {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Destination {
-  AllTools,
-  Installed,
+  Tools,
   Doctor,
   Disk,
   Applications,
@@ -72,12 +72,11 @@ pub enum Destination {
 }
 
 impl Destination {
-  pub const ALL: [Self; 6] = [Self::AllTools, Self::Installed, Self::Doctor, Self::Disk, Self::Applications, Self::Settings];
+  pub const ALL: [Self; 5] = [Self::Tools, Self::Doctor, Self::Disk, Self::Applications, Self::Settings];
 
   pub fn title(self) -> String {
     t(match self {
-      Self::AllTools => "nav.all_tools",
-      Self::Installed => "nav.installed",
+      Self::Tools => "nav.tools",
       Self::Doctor => "nav.doctor",
       Self::Disk => "disk.title",
       Self::Applications => "apps.title",
@@ -85,11 +84,10 @@ impl Destination {
     })
   }
 
-  pub fn includes(self, tool: &tendkit_model::ToolRow, _model: &AppModel) -> bool {
+  pub fn includes(self, _tool: &tendkit_model::ToolRow, _model: &AppModel) -> bool {
     match self {
-      Self::AllTools | Self::Settings => true,
+      Self::Tools | Self::Settings => true,
       Self::Doctor | Self::Disk | Self::Applications => false,
-      Self::Installed => tool.installed_version().is_some(),
     }
   }
 }
@@ -151,7 +149,7 @@ impl Workspace {
     focus_handle.focus(window, cx);
     Self {
       model,
-      destination: Destination::AllTools,
+      destination: Destination::Tools,
       applications,
       catalog_filter: catalog::CatalogFilter::default(),
       search,
@@ -184,14 +182,12 @@ impl Workspace {
       .iter()
       .flat_map(|category| model.tools.iter().filter(move |t| t.category() == *category))
       .filter(|tool| {
-        self.destination.includes(tool, model)
-          && (!matches!(self.destination, Destination::AllTools | Destination::Installed) || self.catalog_filter.includes(tool, model))
-          && {
-            query.is_empty() || {
-              let haystack = format!("{} {} {}", tool.name, tool.subtitle(), tool.primary().map(|i| i.source.as_str()).unwrap_or(""));
-              haystack.to_lowercase().contains(&query)
-            }
+        self.destination.includes(tool, model) && (!matches!(self.destination, Destination::Tools) || self.catalog_filter.includes(tool, model)) && {
+          query.is_empty() || {
+            let haystack = format!("{} {} {}", tool.name, tool.subtitle(), tool.primary().map(|i| i.source.as_str()).unwrap_or(""));
+            haystack.to_lowercase().contains(&query)
           }
+        }
       })
       .cloned()
       .collect()
@@ -221,14 +217,12 @@ impl Workspace {
   }
 
   fn navigate(&mut self, destination: Destination, cx: &mut Context<Self>) {
-    if destination == Destination::Applications {
-      self.applications.update(cx, |page, cx| page.ensure_loaded(cx));
-    }
+    self.applications.update(cx, |page, cx| page.set_active(destination == Destination::Applications, cx));
     if destination == Destination::Disk && self.model.read(cx).disk.path.as_os_str().is_empty() {
       let path = tendkit_storage::paths::home_dir();
       self.model.update(cx, |model, cx| model.scan_disk(path, cx));
     }
-    if self.destination != destination && matches!(destination, Destination::AllTools | Destination::Installed) {
+    if self.destination != destination && matches!(destination, Destination::Tools) {
       self.catalog_filter = catalog::CatalogFilter::All;
     }
     self.destination = destination;
@@ -277,10 +271,6 @@ impl Workspace {
       Destination::Doctor => t("doctor.subtitle"),
       Destination::Disk => t("disk.subtitle"),
       Destination::Applications => t("apps.subtitle"),
-      Destination::Installed => tf(
-        "toolbar.installed_summary",
-        &[("installed", &self.visible_tools(cx).len().to_string()), ("updates", &self.model.read(cx).update_count().to_string())],
-      ),
       _ => tf("toolbar.tools_count", &[("count", &self.visible_tools(cx).len().to_string())]),
     };
     let busy = self.model.read(cx).busy();
@@ -335,7 +325,7 @@ impl Render for Workspace {
       self.render_disk(cx).into_any_element()
     } else if self.destination == Destination::Doctor {
       self.render_doctor(cx).into_any_element()
-    } else if matches!(self.destination, Destination::AllTools | Destination::Installed) {
+    } else if matches!(self.destination, Destination::Tools) {
       self.render_catalog(window, cx).into_any_element()
     } else {
       h_flex().size_full().child(self.render_tool_list(cx)).child(self.render_detail(window, cx)).into_any_element()

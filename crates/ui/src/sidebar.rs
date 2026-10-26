@@ -27,8 +27,7 @@ impl Workspace {
       .map(|destination| {
         let count = model.tools.iter().filter(|t| destination.includes(t, model)).count();
         let icon = match destination {
-          Destination::AllTools => Icon::new(Lucide::Boxes),
-          Destination::Installed => Icon::new(IconName::CircleCheck),
+          Destination::Tools => Icon::new(Lucide::Boxes),
           Destination::Doctor => Icon::new(Lucide::Terminal),
           Destination::Disk => Icon::new(Lucide::HardDrive),
           Destination::Applications => Icon::new(Lucide::AppWindow),
