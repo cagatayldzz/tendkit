@@ -63,7 +63,6 @@ impl Workspace {
     let busy = model.busy();
     let scanning = model.is_scanning;
     let last_check = model.last_update_check.map(crate::platform::local_time);
-    let show_progress = model.is_executing || model.run_status.is_some();
     let show_bar = !model.selected.is_empty() || model.is_planning;
     let error = model.error.clone();
     let tools = self.visible_tools(cx);
@@ -168,9 +167,6 @@ impl Workspace {
     }
     if let Some(error) = error {
       body = body.child(Alert::error("catalog-error", error));
-    }
-    if show_progress {
-      body = body.child(self.render_progress(cx));
     }
     if tools.is_empty() {
       body = body.child(

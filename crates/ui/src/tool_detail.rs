@@ -24,8 +24,7 @@ impl Workspace {
     let theme = cx.theme().clone();
     let model = self.model.read(cx);
     let focused = self.focused_tool.and_then(|id| self.visible_tools(cx).into_iter().find(|t| t.id == id));
-    let show_progress = model.is_executing || model.run_status.is_some();
-    let centered = focused.is_none() && model.error.is_none() && !show_progress;
+    let centered = focused.is_none() && model.error.is_none();
     let show_bar = !model.selected.is_empty() || model.is_planning;
     let error = model.error.clone();
 
@@ -45,9 +44,6 @@ impl Workspace {
           .child(div().max_w(px(300.)).text_center().text_size(px(13.)).text_color(theme.muted_foreground).child(t("detail.empty_hint"))),
       ),
     };
-    if show_progress {
-      body = body.child(self.render_progress(cx));
-    }
 
     v_flex()
       .size_full()

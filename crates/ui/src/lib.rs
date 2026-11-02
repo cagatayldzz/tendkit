@@ -107,6 +107,8 @@ pub struct Workspace {
   doctor_expanded: std::collections::HashSet<&'static str>,
   /// The release the user was last notified about, so each one is announced once.
   notified_update: Option<String>,
+  /// Whether the run progress dialog is currently open.
+  progress_open: bool,
   applied_theme: ThemeChoice,
   focus_handle: FocusHandle,
   _subscriptions: Vec<Subscription>,
@@ -136,6 +138,10 @@ impl Workspace {
       cx.observe_in(&model, window, |this, model, window, cx| {
         if model.read(cx).show_plan && !window.has_active_dialog(cx) {
           this.open_plan(window, cx);
+        }
+        let running = model.read(cx).is_executing || model.read(cx).run_status.is_some();
+        if running && !this.progress_open && !window.has_active_dialog(cx) {
+          this.open_progress(window, cx);
         }
         let theme = model.read(cx).theme_choice();
         if theme != this.applied_theme {
@@ -168,6 +174,7 @@ impl Workspace {
       doctor_path_expanded: false,
       doctor_expanded: std::collections::HashSet::new(),
       notified_update: None,
+      progress_open: false,
       applied_theme,
       focus_handle,
       _subscriptions: subscriptions,

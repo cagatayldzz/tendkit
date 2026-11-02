@@ -114,6 +114,7 @@ progress.verify = Doğrula ve Devam Et
 progress.footer_ok = Araçlar doğrulandı. PATH değiştiyse yeni bir terminal oturumu açın.
 progress.footer_cancelled = Tamamlanan değişiklikler korunur. Yeni bir plan oluşturmak için yeniden tarayın.
 progress.cancel = İptal
+progress.close = Kapat
 progress.dismiss = Kapat
 step_status.succeeded = Tamamlandı
 step_status.skipped = Zaten güncel

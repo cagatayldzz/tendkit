@@ -115,6 +115,7 @@ progress.verify = Verify and Continue
 progress.footer_ok = Tools verified. Open a new terminal session if PATH changed.
 progress.footer_cancelled = Completed changes are preserved. Scan again to create a new plan.
 progress.cancel = Cancel
+progress.close = Close
 progress.dismiss = Dismiss
 step_status.succeeded = Completed
 step_status.skipped = Already up to date
