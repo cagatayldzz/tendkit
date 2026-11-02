@@ -7,6 +7,7 @@
 mod connection;
 #[cfg(any(embedded_engine, test))]
 mod embedded;
+mod login_path;
 mod validator;
 
 pub use connection::{engine_executable, EngineConnection, Request};

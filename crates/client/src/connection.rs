@@ -142,6 +142,11 @@ impl EngineConnection {
       None => engine_executable()?,
     };
     let mut command = Command::new(&executable);
+    // Started from Finder, the app only has launchd's minimal PATH; use the login shell's.
+    if let Some(path) = crate::login_path::engine_path() {
+      command.env("PATH", path);
+    }
+
     #[cfg(windows)]
     {
       use std::os::windows::process::CommandExt;
