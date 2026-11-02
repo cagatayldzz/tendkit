@@ -86,6 +86,7 @@ detail.source = Source
 detail.locations = Installation Locations
 detail.update_available = Update available
 detail.npm_note = npm is updated together with Node.js.
+detail.external_manager = Installed with {source}. TendKit leaves installations from other managers alone, so update this one with {source} itself.
 detail.managed_with_node = Managed with Node.js
 action.refresh = Refresh
 action.install = Install

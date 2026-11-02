@@ -85,6 +85,7 @@ detail.source = Kaynak
 detail.locations = Kurulum Konumları
 detail.update_available = Güncelleme var
 detail.npm_note = npm, Node.js ile birlikte güncellenir.
+detail.external_manager = {source} ile kurulmuş. TendKit başka yöneticilerin kurulumlarına dokunmaz; bunu {source} ile güncelleyin.
 detail.managed_with_node = Node.js ile birlikte yönetilir
 action.refresh = Yenile
 action.install = Yükle

@@ -119,7 +119,11 @@ impl Workspace {
                 .gap(px(3.))
                 .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).child(t("detail.update_available")))
                 .child(mono(format!("{installed} → {latest}")).text_size(px(12.)).text_color(theme.muted_foreground))
-                .when(id == "npm", |this| this.child(caption(t("detail.npm_note"), cx))),
+                .when(id == "npm", |this| this.child(caption(t("detail.npm_note"), cx)))
+                .when(id != "npm" && !updatable, |this| {
+                  let source = tool.primary().map(|installed| installed.source.clone()).unwrap_or_default();
+                  this.child(caption(tf("detail.external_manager", &[("source", &source)]), cx))
+                }),
             )
             .when(updatable, |this| {
               this.child(
