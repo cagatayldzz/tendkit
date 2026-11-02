@@ -32,6 +32,9 @@ pub struct DiskReport {
   pub entries: Vec<DiskEntry>,
   pub capacity: Option<(u64, u64, u64)>,
   pub skipped: usize,
+  /// Locations that could not be read, up to [`MAX_SKIPPED_PATHS`].
+  #[serde(default)]
+  pub skipped_paths: Vec<PathBuf>,
   pub excluded: usize,
   pub partial: bool,
 }
@@ -155,12 +158,34 @@ impl DiskIndex {
 }
 
 /// Subtree totals returned by [`Scan::size`] and merged into the parent.
+/// How many unreadable locations a report names; the count stays exact.
+pub const MAX_SKIPPED_PATHS: usize = 50;
+
 #[derive(Default)]
 struct Totals {
   bytes: u64,
   skipped: usize,
+  skipped_paths: Vec<PathBuf>,
   excluded: usize,
   partial: bool,
+}
+
+impl Totals {
+  fn skip(&mut self, path: &Path) {
+    self.skipped += 1;
+    if self.skipped_paths.len() < MAX_SKIPPED_PATHS {
+      self.skipped_paths.push(path.to_path_buf());
+    }
+  }
+
+  fn merge(&mut self, other: Totals) {
+    self.bytes = self.bytes.saturating_add(other.bytes);
+    self.skipped += other.skipped;
+    let room = MAX_SKIPPED_PATHS - self.skipped_paths.len();
+    self.skipped_paths.extend(other.skipped_paths.into_iter().take(room));
+    self.excluded += other.excluded;
+    self.partial |= other.partial;
+  }
 }
 
 /// Upper bound on concurrently running scan threads, including the caller.
@@ -214,7 +239,7 @@ impl Scan<'_> {
     }
     self.visited.fetch_add(1, Ordering::Relaxed);
     let Ok(metadata) = fs::symlink_metadata(path) else {
-      totals.skipped = 1;
+      totals.skip(path);
       return totals;
     };
     if metadata.is_symlink() {
@@ -238,7 +263,7 @@ impl Scan<'_> {
       return totals;
     }
     let Ok(children) = fs::read_dir(path) else {
-      totals.skipped = 1;
+      totals.skip(path);
       return totals;
     };
     // List immediate children before descending so a large first subtree does
@@ -252,7 +277,7 @@ impl Scan<'_> {
           let directory = !excluded && child.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
           entries.push(DiskEntry { path, bytes: 0, directory, excluded, measured: false });
         }
-        Err(_) => totals.skipped += 1,
+        Err(_) => totals.skip(path),
       }
       if entries.len() >= 100_000 || self.cancel.load(Ordering::Relaxed) {
         totals.partial = true;
@@ -306,16 +331,20 @@ impl Scan<'_> {
         let Some(result) = result else { continue };
         entry.bytes = result.bytes;
         entry.measured = reports.contains_key(&entry.path) || !entry.directory;
-        totals.bytes = totals.bytes.saturating_add(result.bytes);
-        totals.skipped += result.skipped;
-        totals.excluded += result.excluded;
-        totals.partial |= result.partial;
+        totals.merge(result);
       }
     }
     entries.sort_by(|a, b| b.bytes.cmp(&a.bytes).then_with(|| a.path.cmp(&b.path)));
     self.reports.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).insert(
       path.to_path_buf(),
-      DiskReport { entries, skipped: totals.skipped, excluded: totals.excluded, partial: totals.partial, capacity: None },
+      DiskReport {
+        entries,
+        skipped: totals.skipped,
+        skipped_paths: totals.skipped_paths.clone(),
+        excluded: totals.excluded,
+        partial: totals.partial,
+        capacity: None,
+      },
     );
     totals
   }

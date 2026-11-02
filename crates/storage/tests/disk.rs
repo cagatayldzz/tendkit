@@ -214,3 +214,22 @@ fn developer_usage_ignores_unmeasured_and_excluded_directories() {
   report.entries[0].excluded = true;
   assert_eq!(index.developer_usage(&fixture.0).counts, [0, 0, 0]);
 }
+
+#[cfg(unix)]
+#[test]
+fn unreadable_directories_are_named_in_the_report() {
+  use std::os::unix::fs::PermissionsExt;
+
+  let fixture = Fixture::new();
+  let locked = fixture.0.join("locked");
+  fs::create_dir_all(&locked).unwrap();
+  fs::write(fixture.0.join("visible.txt"), "data").unwrap();
+  fs::set_permissions(&locked, fs::Permissions::from_mode(0o000)).unwrap();
+  let report = inspect_with_home(&fixture.0, &AtomicBool::new(false), PathBuf::new());
+  fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+  let report = report.unwrap();
+  // Running as root can read everything, so only assert when the directory was refused.
+  if report.skipped > 0 {
+    assert_eq!(report.skipped_paths, vec![locked]);
+  }
+}

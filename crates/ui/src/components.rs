@@ -10,11 +10,11 @@ use tendkit_model::{AppModel, ToolRow, UpdateStatus};
 use tendkit_protocol::{StepAction, StepStatus};
 
 pub fn orange() -> Hsla {
-  hsla(28. / 360., 0.92, 0.52, 1.)
+  crate::palette::warning_text()
 }
 
 pub fn green() -> Hsla {
-  hsla(142. / 360., 0.62, 0.42, 1.)
+  crate::palette::success_text()
 }
 
 pub fn tool_tint(id: &str, cx: &App) -> Hsla {

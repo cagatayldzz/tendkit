@@ -1,6 +1,28 @@
 //! The GitHub Desktop colour palette, applied over GPUI Kit's theme tokens.
 
 use gpui_kit::{component::ThemeColor, *};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static DARK: AtomicBool = AtomicBool::new(true);
+
+/// Orange for warnings and updates, readable as text on the page and on cards.
+pub fn warning_text() -> Hsla {
+  status_color(DARK.load(Ordering::Relaxed), true)
+}
+
+/// Green for success, readable as text on the page and on cards.
+pub fn success_text() -> Hsla {
+  status_color(DARK.load(Ordering::Relaxed), false)
+}
+
+fn status_color(dark: bool, warning: bool) -> Hsla {
+  hex(match (dark, warning) {
+    (true, true) => 0xf0883e,
+    (true, false) => 0x3fb950,
+    (false, true) => 0xb35900,
+    (false, false) => 0x1a7f37,
+  })
+}
 
 fn hex(value: u32) -> Hsla {
   rgb(value).into()
@@ -209,6 +231,7 @@ impl Palette {
 
 /// Applies the dark or light GitHub Desktop palette to the theme colours.
 pub fn apply(colors: &mut ThemeColor, dark: bool) {
+  DARK.store(dark, Ordering::Relaxed);
   if dark {
     Palette::dark().apply(colors);
   } else {

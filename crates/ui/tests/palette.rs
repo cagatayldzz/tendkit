@@ -1,4 +1,4 @@
-use super::{apply, contrast, luminance};
+use super::{apply, contrast, luminance, status_color};
 use gpui_kit::{black, component::ThemeColor, white};
 
 fn themed(dark: bool) -> ThemeColor {
@@ -50,4 +50,17 @@ fn surfaces_are_distinguishable_from_the_page_in_the_dark_theme() {
 fn contrast_matches_the_wcag_reference_values() {
   assert!((contrast(white(), black()) - 21.0).abs() < 0.01);
   assert!((contrast(white(), white()) - 1.0).abs() < 0.01);
+}
+
+#[test]
+fn status_text_colours_are_readable_on_pages_and_cards() {
+  for dark in [false, true] {
+    let c = themed(dark);
+    for (label, color) in [("warning", status_color(dark, true)), ("success", status_color(dark, false))] {
+      for (surface, background) in [("page", c.background), ("card", c.group_box), ("sidebar", c.sidebar)] {
+        let ratio = contrast(color, background);
+        assert!(ratio >= 4.5, "{} theme: {label} text on {surface} has contrast {ratio:.2}", if dark { "dark" } else { "light" });
+      }
+    }
+  }
 }

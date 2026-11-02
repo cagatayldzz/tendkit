@@ -18,7 +18,6 @@ mod settings;
 mod sidebar;
 mod status_bar;
 mod tool_detail;
-mod tool_list;
 
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -79,11 +78,9 @@ impl Destination {
     })
   }
 
-  pub fn includes(self, _tool: &tendkit_model::ToolRow, _model: &AppModel) -> bool {
-    match self {
-      Self::Tools | Self::Settings => true,
-      Self::Doctor | Self::Disk | Self::Applications => false,
-    }
+  /// Only the tool catalog lists tools, with search, a count, and arrow-key selection.
+  pub fn is_tool_catalog(self) -> bool {
+    self == Self::Tools
   }
 }
 
@@ -103,6 +100,7 @@ pub struct Workspace {
   disk_search: Entity<InputState>,
   disk_sort_name: bool,
   disk_show_hidden: bool,
+  disk_show_skipped: bool,
   doctor_filter: Option<tendkit_model::DoctorSeverity>,
   doctor_scope_expanded: bool,
   doctor_expanded: std::collections::HashSet<&'static str>,
@@ -163,6 +161,7 @@ impl Workspace {
       disk_search,
       disk_sort_name: false,
       disk_show_hidden: true,
+      disk_show_skipped: false,
       doctor_filter: None,
       doctor_scope_expanded: false,
       doctor_expanded: std::collections::HashSet::new(),
@@ -185,7 +184,7 @@ impl Workspace {
       .iter()
       .flat_map(|category| model.tools.iter().filter(move |t| t.category() == *category))
       .filter(|tool| {
-        self.destination.includes(tool, model) && (!matches!(self.destination, Destination::Tools) || self.catalog_filter.includes(tool, model)) && {
+        (!self.destination.is_tool_catalog() || self.catalog_filter.includes(tool, model)) && {
           query.is_empty() || {
             let haystack = format!("{} {} {}", tool.name, tool.subtitle(), tool.primary().map(|i| i.source.as_str()).unwrap_or(""));
             haystack.to_lowercase().contains(&query)
@@ -225,7 +224,7 @@ impl Workspace {
       let path = tendkit_storage::paths::home_dir();
       self.model.update(cx, |model, cx| model.scan_disk(path, cx));
     }
-    if self.destination != destination && matches!(destination, Destination::Tools) {
+    if self.destination != destination && destination.is_tool_catalog() {
       self.catalog_filter = catalog::CatalogFilter::All;
     }
     self.destination = destination;
@@ -240,7 +239,7 @@ impl Workspace {
 
   fn move_selection(&mut self, offset: isize, cx: &mut Context<Self>) {
     let ids: Vec<_> = self.visible_tools(cx).iter().map(|t| t.id).collect();
-    if ids.is_empty() || matches!(self.destination, Destination::Settings | Destination::Doctor | Destination::Disk | Destination::Applications) {
+    if ids.is_empty() || !self.destination.is_tool_catalog() {
       return;
     }
     let index = self.focused_tool.and_then(|id| ids.iter().position(|i| *i == id));
@@ -277,14 +276,15 @@ impl Workspace {
       _ => tf("toolbar.tools_count", &[("count", &self.visible_tools(cx).len().to_string())]),
     };
     let busy = self.model.read(cx).busy();
-    let focused = (self.destination == Destination::Tools)
+    let focused = self
+      .destination
+      .is_tool_catalog()
       .then_some(self.focused_tool)
       .flatten()
       .and_then(|id| self.visible_tools(cx).into_iter().find(|tool| tool.id == id));
     let title = focused.as_ref().map_or_else(|| self.destination.title(), |tool| tool.name.to_string());
     let subtitle = focused.as_ref().map_or(subtitle, |tool| tool.category().title().to_string());
-    let show_search =
-      focused.is_none() && !matches!(self.destination, Destination::Settings | Destination::Doctor | Destination::Disk | Destination::Applications);
+    let show_search = focused.is_none() && self.destination.is_tool_catalog();
     TitleBar::new().h(TOOLBAR_HEIGHT).pl_4().bg(theme.background).border_color(theme.border).child(
       h_flex()
         .w_full()
@@ -323,18 +323,12 @@ impl Render for Workspace {
   fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
     self.request_latest_version(window, cx);
     let theme = cx.theme().clone();
-    let content = if self.destination == Destination::Settings {
-      self.render_settings(cx).into_any_element()
-    } else if self.destination == Destination::Applications {
-      self.applications.clone().into_any_element()
-    } else if self.destination == Destination::Disk {
-      self.render_disk(cx).into_any_element()
-    } else if self.destination == Destination::Doctor {
-      self.render_doctor(cx).into_any_element()
-    } else if matches!(self.destination, Destination::Tools) {
-      self.render_catalog(window, cx).into_any_element()
-    } else {
-      h_flex().size_full().child(self.render_tool_list(cx)).child(self.render_detail(window, cx)).into_any_element()
+    let content = match self.destination {
+      Destination::Tools => self.render_catalog(window, cx).into_any_element(),
+      Destination::Doctor => self.render_doctor(cx).into_any_element(),
+      Destination::Disk => self.render_disk(cx).into_any_element(),
+      Destination::Applications => self.applications.clone().into_any_element(),
+      Destination::Settings => self.render_settings(cx).into_any_element(),
     };
     let status_bar = self.render_status_bar(cx);
     v_flex()

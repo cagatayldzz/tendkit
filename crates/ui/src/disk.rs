@@ -211,6 +211,36 @@ impl Workspace {
       if report.partial || report.skipped > 0 {
         list = list.child(div().px_5().pb_2().text_xs().text_color(theme.muted_foreground).child(t("disk.index_partial")));
       }
+      if !report.skipped_paths.is_empty() {
+        let shown = self.disk_show_skipped;
+        let mut skipped = v_flex().px_5().pb_2().gap_1().child(
+          div()
+            .id("disk-skipped-toggle")
+            .cursor_pointer()
+            .text_xs()
+            .text_color(theme.blue)
+            .child(if shown { t("disk.skipped_hide") } else { tf("disk.skipped_show", &[("count", &report.skipped.to_string())]) })
+            .on_click(cx.listener(|this, _, _, cx| {
+              this.disk_show_skipped = !this.disk_show_skipped;
+              cx.notify();
+            })),
+        );
+        if shown {
+          for path in &report.skipped_paths {
+            skipped =
+              skipped.child(div().text_xs().font_family("Menlo").text_color(theme.muted_foreground).truncate().child(path.display().to_string()));
+          }
+          if report.skipped > report.skipped_paths.len() {
+            skipped = skipped.child(
+              div()
+                .text_xs()
+                .text_color(theme.muted_foreground)
+                .child(tf("disk.skipped_more", &[("count", &(report.skipped - report.skipped_paths.len()).to_string())])),
+            );
+          }
+        }
+        list = list.child(skipped);
+      }
       if report.excluded > 0 {
         list = list.child(
           div()

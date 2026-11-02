@@ -22,10 +22,10 @@ impl Workspace {
     let theme = cx.theme().clone();
     let stable = platform::channel() == "Stable";
     let model = self.model.read(cx);
+    let tool_count = model.tools.len();
     let items: Vec<_> = Destination::ALL
       .into_iter()
       .map(|destination| {
-        let count = model.tools.iter().filter(|t| destination.includes(t, model)).count();
         let icon = match destination {
           Destination::Tools => Icon::new(Lucide::Boxes),
           Destination::Doctor => Icon::new(Lucide::Terminal),
@@ -37,12 +37,7 @@ impl Workspace {
           .icon(icon)
           .active(self.destination == destination)
           .on_click(cx.listener(move |this, _, _, cx| this.navigate(destination, cx)))
-          .when(!matches!(destination, Destination::Settings | Destination::Doctor | Destination::Disk | Destination::Applications), |item| {
-            item.suffix(move |_, _| {
-              let tag = Tag::secondary();
-              tag.small().rounded_full().child(count.to_string())
-            })
-          })
+          .when(destination.is_tool_catalog(), |item| item.suffix(move |_, _| Tag::secondary().small().rounded_full().child(tool_count.to_string())))
       })
       .collect();
 
