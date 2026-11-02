@@ -14,7 +14,10 @@ test("release builds wait for validation and publication waits for verified arti
     expect(jobs[id]["continue-on-error"] ?? false).toBe(false);
     expect(jobs[id].steps.some((step) => step.uses === "./.github/actions/build-release")).toBe(true);
   }
-  expect(jobs.verify.needs.toSorted()).toEqual(platforms.toSorted());
+  expect(jobs.verify.needs.toSorted()).toEqual([...platforms, "macos_checks"].toSorted());
+  // The macOS application is linted and tested in parallel with the builds.
+  expect(jobs.macos_checks.needs).toBe("prepare");
+  expect(jobs.macos_checks.steps.some((step) => step.run?.includes("cargo test --locked -p tendkit"))).toBe(true);
   expect(jobs.publish.needs).toBe("verify");
   expect(jobs.verify.if).toBe("success()");
   expect(jobs.publish.if).toBe("success()");

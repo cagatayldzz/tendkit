@@ -187,9 +187,10 @@ are visible in the catalog and release notes; supported targets and runtime
 requirements live in [platform-support.md](platform-support.md).
 
 The release workflow uses a single ordered graph: validate → prepare → four
-parallel platform jobs → verify → publish. Platform jobs share the local
-`build-release` composite action; macOS lint/tests run inside those jobs instead
-of duplicating builds in a reusable CI workflow. Verification assembles all five
+parallel platform jobs plus a parallel macOS lint/test job → verify → publish.
+Platform jobs share the local `build-release` composite action; the macOS
+lint/tests run once in their own job rather than inside each macOS build, which
+would compile the GPUI tree again in every one. Verification assembles all five
 packages, writes checksums, and uploads a single verified artifact for publication.
 Publish rechecks the hashes after download. Normal push/PR CI remains Ubuntu-only.
 

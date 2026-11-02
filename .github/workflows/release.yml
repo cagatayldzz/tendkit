@@ -100,6 +100,31 @@ jobs:
             dist/RELEASE_NOTES.md
 
 
+  # The macOS application is checked in parallel with the builds instead of
+  # compiling the GPUI tree a second and third time inside each build job. The
+  # code is identical on both architectures, so one runner checks it.
+  macos_checks:
+    name: 3 · macOS checks
+    needs: prepare
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-inputs
+          path: .
+      - run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-macos-checks
+      - name: Lint and test macOS application
+        run: |
+          cargo clippy --locked -p tendkit -p tendkit-ui -p tendkit-model --all-targets -- -D warnings
+          cargo test --locked -p tendkit -p tendkit-ui -p tendkit-model
+
   macos_arm64:
     name: 3 · macOS Apple Silicon
     needs: prepare
@@ -117,6 +142,7 @@ jobs:
         with:
           os: macos
           arch: arm64
+          checks: "false"
           release-tag: ${{ needs.prepare.outputs.tag }}
 
   macos_intel:
@@ -136,6 +162,7 @@ jobs:
         with:
           os: macos
           arch: x64
+          checks: "false"
           release-tag: ${{ needs.prepare.outputs.tag }}
 
   windows:
@@ -167,7 +194,7 @@ jobs:
   verify:
     name: 4 · Verify packages
     if: success()
-    needs: [macos_arm64, macos_intel, windows, linux]
+    needs: [macos_checks, macos_arm64, macos_intel, windows, linux]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:

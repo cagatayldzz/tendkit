@@ -39,10 +39,11 @@ dbg_macro = "warn"
 todo = "deny"
 unimplemented = "deny"
 
-# Smaller, faster release binaries. Panics must keep unwinding: the engine and
-# detection threads rely on catching them at thread joins.
+# Smaller release binaries. Panics must keep unwinding: the engine and detection
+# threads rely on catching them at thread joins. LTO is deliberately off: on the
+# GPUI dependency tree it adds many minutes to every release build for little
+# gain in a GPU-bound interface.
 [profile.release]
-lto = "thin"
 strip = true
 
 # Dependencies (GPUI above all) build without debug info: the target directory

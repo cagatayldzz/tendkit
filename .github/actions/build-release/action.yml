@@ -10,6 +10,10 @@ inputs:
   release-tag:
     description: Prepared release tag.
     required: true
+  checks:
+    description: Run the macOS lint and tests here. Release builds pass false and run them in a parallel job.
+    required: false
+    default: "true"
 runs:
   using: composite
   steps:
@@ -39,7 +43,7 @@ runs:
       with:
         shared-key: release-${{ inputs.os }}-${{ inputs.arch }}
     - name: Lint and test macOS application
-      if: inputs.os == 'macos'
+      if: inputs.os == 'macos' && inputs.checks == 'true'
       shell: bash
       run: |
         cargo clippy --locked -p tendkit -p tendkit-ui -p tendkit-model --all-targets -- -D warnings

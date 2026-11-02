@@ -20,16 +20,19 @@ updates remain macOS-only. Windows packages are unsigned. See
 requirements, and the exact support boundaries.
 
 The release graph follows the work order. Validation finishes before version
-preparation or platform builds start. Native application tests run inside their
-build jobs, and only verified artifacts reach publication.
+preparation or platform builds start. The macOS application is linted and tested in a
+parallel job so the GPUI tree is not compiled again inside each build job, and
+only verified artifacts reach publication.
 
 ```mermaid
 flowchart LR
   V["1 · Validate"] --> P["2 · Prepare version"]
   P --> A["3 · macOS Apple Silicon"]
   P --> I["3 · macOS Intel"]
+  P --> K["3 · macOS checks"]
   P --> W["3 · Windows x64"]
   P --> L["3 · Linux x64"]
+  K --> C
   A --> C["4 · Verify packages"]
   I --> C
   W --> C
