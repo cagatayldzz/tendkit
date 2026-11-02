@@ -9,7 +9,7 @@ mod tools;
 pub use tendkit_storage::disk::{DiskEntry, DiskReport};
 
 pub use app_update::{AppUpdate, ThemeChoice, APP_UPDATES_ENABLED, APP_VERSION};
-pub use doctor::{DoctorCheck, DoctorFinding, DoctorInstallation, DoctorReport, DoctorSeverity};
+pub use doctor::{DoctorCheck, DoctorFinding, DoctorInstallation, DoctorReport, DoctorSeverity, PathRow};
 pub use tools::{StepOutcome, ToolCategory, ToolRow, UpdateStatus};
 
 use futures::{channel::mpsc, StreamExt};

@@ -138,3 +138,30 @@ fn failed_completion_cannot_leave_a_healthy_doctor_report() {
   model.scan_complete = true;
   assert_eq!(model.doctor_report().count(DoctorSeverity::Passed), 1);
 }
+
+#[test]
+fn path_rows_show_tools_duplicates_and_relative_entries() {
+  let tool = node(vec![installation("/brew/bin/node", Some("24.0.0"), "Homebrew")]);
+  let report = analyze(&[tool], Some(&paths(&["/nvm/bin", "/brew/bin", "/brew/bin", "bin"])));
+  let rows = report.path_rows();
+  assert_eq!(rows.len(), 4);
+  assert!(rows[0].tools.is_empty());
+  assert_eq!(rows[1].tools, vec!["Node.js"]);
+  assert!(!rows[1].duplicate);
+  assert!(rows[2].duplicate);
+  assert!(rows[3].relative);
+  assert_eq!(report.attention_count(), 1);
+}
+
+#[test]
+fn text_report_lists_every_tool_and_the_path() {
+  let tool = node(vec![installation("/brew/bin/node", Some("24.0.0"), "Homebrew")]);
+  let text = analyze(&[tool], Some(&paths(&["/brew/bin"]))).to_text();
+  assert!(text.contains("Node.js — 24.0.0 · Homebrew · /brew/bin/node"));
+  assert!(text.ends_with("PATH:\n/brew/bin\n"));
+}
+
+#[test]
+fn text_report_has_no_path_section_without_path_information() {
+  assert!(!analyze(&[node(vec![])], None).to_text().contains("PATH:"));
+}

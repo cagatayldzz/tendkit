@@ -76,9 +76,81 @@ impl DoctorCheck {
 pub struct DoctorReport {
   pub checks: Vec<DoctorCheck>,
   pub relative_path_entries: usize,
+  /// The PATH the scan inherited, in lookup order; `None` when the scan did not report it.
+  pub path_entries: Option<Vec<String>>,
+}
+
+/// One directory of the inherited PATH and what was found in it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PathRow {
+  pub entry: String,
+  /// Names of the detected tools whose binary sits directly in this directory.
+  pub tools: Vec<&'static str>,
+  /// The same directory already appeared earlier in PATH.
+  pub duplicate: bool,
+  /// Relative and empty entries are not scanned.
+  pub relative: bool,
 }
 
 impl DoctorReport {
+  /// Warnings, plus a relative PATH entry which is also shown as a warning.
+  pub fn attention_count(&self) -> usize {
+    self.count(DoctorSeverity::Warning) + usize::from(self.relative_path_entries > 0)
+  }
+
+  /// The inherited PATH with the tools found in each directory.
+  pub fn path_rows(&self) -> Vec<PathRow> {
+    let mut seen = BTreeSet::new();
+    self
+      .path_entries
+      .iter()
+      .flatten()
+      .map(|entry| {
+        let relative = !Path::new(entry).is_absolute();
+        let tools = self
+          .checks
+          .iter()
+          .filter(|check| check.installations.iter().any(|found| Path::new(&found.installation.path).parent() == Some(Path::new(entry))))
+          .map(|check| check.name)
+          .collect();
+        PathRow { entry: entry.clone(), tools, duplicate: !seen.insert(entry.clone()), relative }
+      })
+      .collect()
+  }
+
+  /// A plain-text summary for support requests or notes. It names only
+  /// diagnostics TendKit already shows.
+  pub fn to_text(&self) -> String {
+    let mut text = format!("{}\n", tendkit_i18n::t("doctor.report_title"));
+    for check in &self.checks {
+      let status = tendkit_i18n::t(match check.severity {
+        DoctorSeverity::Passed => "doctor.passed",
+        DoctorSeverity::Info => "doctor.notice",
+        DoctorSeverity::Warning => "doctor.warning",
+        DoctorSeverity::Unavailable => "doctor.unavailable",
+      });
+      let detail = match check.installations.iter().find(|found| found.active).or(check.installations.first()) {
+        Some(found) => {
+          format!("{} · {} · {}", found.installation.version.as_deref().unwrap_or("—"), found.installation.source, found.installation.path)
+        }
+        None => String::new(),
+      };
+      let findings: Vec<_> = check.findings.iter().map(|finding| tendkit_i18n::t(&format!("doctor.{}.title", finding.key()))).collect();
+      text.push_str(&format!("[{status}] {}", check.name));
+      if !detail.is_empty() {
+        text.push_str(&format!(" — {detail}"));
+      }
+      if !findings.is_empty() {
+        text.push_str(&format!(" ({})", findings.join("; ")));
+      }
+      text.push('\n');
+    }
+    if let Some(entries) = &self.path_entries {
+      text.push_str(&format!("\nPATH:\n{}\n", entries.join("\n")));
+    }
+    text
+  }
+
   pub fn count(&self, severity: DoctorSeverity) -> usize {
     self.checks.iter().filter(|check| check.severity == severity).count()
   }
@@ -101,7 +173,7 @@ impl AppModel {
 fn analyze(tools: &[ToolRow], path: Option<&[String]>) -> DoctorReport {
   let checks = tools.iter().map(|tool| check(tool, path)).collect();
   let relative_path_entries = path.unwrap_or_default().iter().filter(|entry| !Path::new(entry).is_absolute()).count();
-  DoctorReport { checks, relative_path_entries }
+  DoctorReport { checks, relative_path_entries, path_entries: path.map(<[String]>::to_vec) }
 }
 
 fn check(tool: &ToolRow, path: Option<&[String]>) -> DoctorCheck {

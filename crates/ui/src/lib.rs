@@ -103,6 +103,7 @@ pub struct Workspace {
   disk_show_skipped: bool,
   doctor_filter: Option<tendkit_model::DoctorSeverity>,
   doctor_scope_expanded: bool,
+  doctor_path_expanded: bool,
   doctor_expanded: std::collections::HashSet<&'static str>,
   /// The release the user was last notified about, so each one is announced once.
   notified_update: Option<String>,
@@ -164,6 +165,7 @@ impl Workspace {
       disk_show_skipped: false,
       doctor_filter: None,
       doctor_scope_expanded: false,
+      doctor_path_expanded: false,
       doctor_expanded: std::collections::HashSet::new(),
       notified_update: None,
       applied_theme,
