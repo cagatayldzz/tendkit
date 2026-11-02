@@ -13,6 +13,15 @@ fn temp_path(name: &str) -> PathBuf {
   std::env::temp_dir().join(format!("tendkit-{name}-{}-{n}", std::process::id()))
 }
 
+/// Serializes the tests that write an executable and start a process. Linux
+/// refuses to execute a file that any process still has open for writing
+/// (`ETXTBSY`), and a process forked by a concurrent test inherits that open
+/// descriptor until it execs, so those tests must not overlap.
+fn spawn_lock() -> std::sync::MutexGuard<'static, ()> {
+  static LOCK: Mutex<()> = Mutex::new(());
+  LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 fn engine_path() -> PathBuf {
   let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/tendkit-engine");
   assert!(path.is_file(), "Build the Rust engine first: cargo build -p tendkit-engine");
@@ -102,6 +111,7 @@ fn incomplete_and_mismatched_streams_are_rejected() {
 
 #[test]
 fn actual_rust_engine_completes_scan() {
+  let _spawn = spawn_lock();
   let mut events = Vec::new();
   EngineConnection::new().run(&Request::new("scan"), Some(&engine_path()), |e| events.push(e)).unwrap();
   assert_eq!(events.len(), TOOL_IDS.len() + 2);
@@ -163,6 +173,7 @@ send "$sequence" run_finished '{"status":"STATUS"}'
 }
 
 fn run_fixture(control: &str, trigger: EventType, status: &str) -> Vec<EngineEvent> {
+  let _spawn = spawn_lock();
   let event_name = if control == "continue" { "external_action_required" } else { "log" };
   let fixture = make_fixture(control, event_name, status);
   let connection = Arc::new(EngineConnection::new());
@@ -198,6 +209,7 @@ fn cancellation_reaches_engine_over_control_pipe() {
 #[cfg(target_os = "macos")]
 #[test]
 fn actual_rust_executor_accepts_current_plan_and_rejects_stale_plan() {
+  let _spawn = spawn_lock();
   use tendkit_protocol::Installation;
 
   let root = temp_path("execution");
@@ -256,6 +268,7 @@ fn one_scan_cannot_change_its_inherited_path_context() {
 #[cfg(not(target_os = "macos"))]
 #[test]
 fn actual_rust_executor_rejects_installation_on_unsupported_platforms() {
+  let _spawn = spawn_lock();
   let request = Request::new("execute").configure_shell(false).plan(fixture_plan());
   let result = EngineConnection::new().run(&request, Some(&engine_path()), |_| {});
   assert!(
@@ -266,6 +279,7 @@ fn actual_rust_executor_rejects_installation_on_unsupported_platforms() {
 
 #[test]
 fn actual_rust_engine_preserves_early_rejection_messages() {
+  let _spawn = spawn_lock();
   let result = EngineConnection::new().run(&Request::new("unsupported-command"), Some(&engine_path()), |_| {});
   assert_eq!(result, Err(EngineFailure::Failed("Unsupported protocol version or command".into())));
 }
