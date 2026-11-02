@@ -15,11 +15,13 @@ pub struct AppSettings {
   pub configure_shell: bool,
   /// The interface language code; `None` follows the language of the computer.
   pub language: Option<String>,
+  /// `light` or `dark`; `None` follows the appearance of the computer.
+  pub theme: Option<String>,
 }
 
 impl Default for AppSettings {
   fn default() -> Self {
-    Self { check_app_updates: true, configure_shell: true, language: None }
+    Self { check_app_updates: true, configure_shell: true, language: None, theme: None }
   }
 }
 

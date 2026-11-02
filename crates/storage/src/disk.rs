@@ -10,7 +10,11 @@ use std::{
   fs,
   path::{Path, PathBuf},
   process::Command,
-  sync::atomic::{AtomicBool, Ordering},
+  sync::{
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+    Mutex,
+  },
+  thread,
   time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -150,60 +154,92 @@ impl DiskIndex {
   }
 }
 
+/// Subtree totals returned by [`Scan::size`] and merged into the parent.
+#[derive(Default)]
+struct Totals {
+  bytes: u64,
+  skipped: usize,
+  excluded: usize,
+  partial: bool,
+}
+
+/// Upper bound on concurrently running scan threads, including the caller.
+const MAX_SCAN_THREADS: usize = 8;
+
+/// Stack for scan threads; recursion is bounded at 128 levels.
+const SCAN_STACK_BYTES: usize = 8 * 1024 * 1024;
+
 struct Scan<'a> {
   cancel: &'a AtomicBool,
   home: PathBuf,
   started: Instant,
-  visited: usize,
+  visited: AtomicUsize,
+  /// Extra threads currently running besides the caller.
+  workers: AtomicUsize,
+  worker_limit: usize,
   #[cfg(unix)]
-  seen: HashSet<(u64, u64)>,
-  report: DiskReport,
-  reports: HashMap<PathBuf, DiskReport>,
+  seen: Mutex<HashSet<(u64, u64)>>,
+  reports: Mutex<HashMap<PathBuf, DiskReport>>,
 }
 
 impl Scan<'_> {
-  fn stopped(&mut self) -> bool {
-    let stopped = self.cancel.load(Ordering::Relaxed) || self.visited >= 1_000_000 || self.started.elapsed().as_secs() >= 600;
-    self.report.partial |= stopped;
-    stopped
+  fn stopped(&self) -> bool {
+    self.cancel.load(Ordering::Relaxed) || self.visited.load(Ordering::Relaxed) >= 1_000_000 || self.started.elapsed().as_secs() >= 600
   }
 
-  fn size(&mut self, path: &Path, depth: usize) -> u64 {
+  fn try_acquire_worker(&self) -> bool {
+    let mut active = self.workers.load(Ordering::Acquire);
+    while active < self.worker_limit {
+      match self.workers.compare_exchange_weak(active, active + 1, Ordering::AcqRel, Ordering::Acquire) {
+        Ok(_) => return true,
+        Err(current) => active = current,
+      }
+    }
+    false
+  }
+
+  fn release_worker(&self) {
+    self.workers.fetch_sub(1, Ordering::AcqRel);
+  }
+
+  fn size(&self, path: &Path, depth: usize) -> Totals {
+    let mut totals = Totals::default();
     if depth >= 128 || self.stopped() {
-      self.report.partial = true;
-      return 0;
+      totals.partial = true;
+      return totals;
     }
     if privacy_excluded(path, &self.home) {
-      self.report.excluded += 1;
-      return 0;
+      totals.excluded = 1;
+      return totals;
     }
-    self.visited += 1;
+    self.visited.fetch_add(1, Ordering::Relaxed);
     let Ok(metadata) = fs::symlink_metadata(path) else {
-      self.report.skipped += 1;
-      return 0;
+      totals.skipped = 1;
+      return totals;
     };
     if metadata.is_symlink() {
-      return 0;
+      return totals;
     }
 
     #[cfg(unix)]
     let own = {
       use std::os::unix::fs::MetadataExt;
 
-      if !self.seen.insert((metadata.dev(), metadata.ino())) {
-        return 0;
+      if !self.seen.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).insert((metadata.dev(), metadata.ino())) {
+        return totals;
       }
       metadata.blocks().saturating_mul(512)
     };
 
     #[cfg(not(unix))]
     let own = metadata.len();
+    totals.bytes = own;
     if !metadata.is_dir() {
-      return own;
+      return totals;
     }
     let Ok(children) = fs::read_dir(path) else {
-      self.report.skipped += 1;
-      return own;
+      totals.skipped = 1;
+      return totals;
     };
     // List immediate children before descending so a large first subtree does
     // not hide the rest of the folder when the scan is cancelled or bounded.
@@ -216,41 +252,72 @@ impl Scan<'_> {
           let directory = !excluded && child.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
           entries.push(DiskEntry { path, bytes: 0, directory, excluded, measured: false });
         }
-        Err(_) => self.report.skipped += 1,
+        Err(_) => totals.skipped += 1,
       }
       if entries.len() >= 100_000 || self.cancel.load(Ordering::Relaxed) {
-        self.report.partial = true;
+        totals.partial = true;
         break;
       }
     }
     entries.sort_by_key(|entry| !self.home.starts_with(&entry.path));
-    let skipped_before = self.report.skipped;
-    let excluded_before = self.report.excluded;
-    let mut bytes = own;
-    for entry in &mut entries {
-      if entry.excluded {
-        self.report.excluded += 1;
-        continue;
+
+    // Directories run on spare worker threads while any are free; files and
+    // the remainder are measured inline. Results are merged in entry order.
+    let mut results: Vec<Option<Totals>> = entries.iter().map(|_| None).collect();
+    thread::scope(|scope| {
+      let mut handles = Vec::new();
+      for (index, entry) in entries.iter().enumerate() {
+        if entry.excluded {
+          totals.excluded += 1;
+          continue;
+        }
+        if self.stopped() {
+          totals.partial = true;
+          continue;
+        }
+        if entry.directory && self.try_acquire_worker() {
+          let spawned = thread::Builder::new().stack_size(SCAN_STACK_BYTES).spawn_scoped(scope, move || {
+            let result = self.size(&entry.path, depth + 1);
+            self.release_worker();
+            result
+          });
+          match spawned {
+            Ok(handle) => handles.push((index, handle)),
+            Err(_) => {
+              self.release_worker();
+              results[index] = Some(self.size(&entry.path, depth + 1));
+            }
+          }
+        } else {
+          results[index] = Some(self.size(&entry.path, depth + 1));
+        }
       }
-      if self.stopped() {
-        continue;
+      for (index, handle) in handles {
+        results[index] = Some(handle.join().unwrap_or_else(|_| {
+          self.release_worker();
+          Totals { partial: true, ..Totals::default() }
+        }));
       }
-      entry.bytes = self.size(&entry.path, depth + 1);
-      entry.measured = self.reports.contains_key(&entry.path) || !entry.directory;
-      bytes = bytes.saturating_add(entry.bytes);
+    });
+
+    {
+      let reports = self.reports.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+      for (entry, result) in entries.iter_mut().zip(results) {
+        let Some(result) = result else { continue };
+        entry.bytes = result.bytes;
+        entry.measured = reports.contains_key(&entry.path) || !entry.directory;
+        totals.bytes = totals.bytes.saturating_add(result.bytes);
+        totals.skipped += result.skipped;
+        totals.excluded += result.excluded;
+        totals.partial |= result.partial;
+      }
     }
     entries.sort_by(|a, b| b.bytes.cmp(&a.bytes).then_with(|| a.path.cmp(&b.path)));
-    self.reports.insert(
+    self.reports.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).insert(
       path.to_path_buf(),
-      DiskReport {
-        entries,
-        skipped: self.report.skipped - skipped_before,
-        excluded: self.report.excluded - excluded_before,
-        partial: self.report.partial,
-        capacity: None,
-      },
+      DiskReport { entries, skipped: totals.skipped, excluded: totals.excluded, partial: totals.partial, capacity: None },
     );
-    bytes
+    totals
   }
 }
 
@@ -272,22 +339,24 @@ fn index_with_home(root: &Path, cancel: &AtomicBool, home: PathBuf) -> Result<Di
   }
   // Validate the root before scanning so an unreadable root is an error.
   fs::read_dir(root).map_err(|error| format!("Cannot read {}: {error}", root.display()))?;
-  let mut scan = Scan {
+  let scan = Scan {
     cancel,
     home: home.clone(),
     started: Instant::now(),
-    visited: 0,
+    visited: AtomicUsize::new(0),
+    workers: AtomicUsize::new(0),
+    worker_limit: thread::available_parallelism().map_or(1, |count| count.get()).min(MAX_SCAN_THREADS) - 1,
     #[cfg(unix)]
-    seen: HashSet::new(),
-    report: DiskReport::default(),
-    reports: HashMap::new(),
+    seen: Mutex::new(HashSet::new()),
+    reports: Mutex::new(HashMap::new()),
   };
   scan.size(root, 0);
+  let mut reports = scan.reports.into_inner().unwrap_or_else(|poisoned| poisoned.into_inner());
   let capacity = filesystem_capacity(if home.as_os_str().is_empty() { root } else { &home });
-  if !scan.reports.contains_key(root) {
-    scan.reports.insert(root.to_path_buf(), DiskReport { partial: true, ..DiskReport::default() });
+  if !reports.contains_key(root) {
+    reports.insert(root.to_path_buf(), DiskReport { partial: true, ..DiskReport::default() });
   }
-  for report in scan.reports.values_mut() {
+  for report in reports.values_mut() {
     report.capacity = capacity;
   }
   Ok(DiskIndex {
@@ -295,7 +364,7 @@ fn index_with_home(root: &Path, cancel: &AtomicBool, home: PathBuf) -> Result<Di
     root: root.to_path_buf(),
     home,
     scanned_at: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),
-    reports: scan.reports,
+    reports,
   })
 }
 

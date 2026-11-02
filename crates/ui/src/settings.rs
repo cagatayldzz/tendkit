@@ -16,7 +16,7 @@ use gpui_kit::{
 };
 use gpui_kit_assets::IconName as Lucide;
 use tendkit_i18n::{system_language, t, tf, Language};
-use tendkit_model::{AppModel, AppUpdate, APP_UPDATES_ENABLED, APP_VERSION};
+use tendkit_model::{AppModel, AppUpdate, ThemeChoice, APP_UPDATES_ENABLED, APP_VERSION};
 use tendkit_updater::Stage;
 
 pub(crate) const PAGE_UPDATES: usize = 1;
@@ -60,6 +60,8 @@ impl Workspace {
     let refresh = model.clone();
     let language_get = model.clone();
     let language_set = model.clone();
+    let theme_get = model.clone();
+    let theme_set = model.clone();
     let general = SettingPage::new(t("settings.general"))
       .icon(IconName::Settings)
       .description(t("settings.general_desc"))
@@ -73,6 +75,22 @@ impl Workspace {
             ),
           )
           .description(t("settings.path_desc")),
+        ),
+      )
+      .group(
+        SettingGroup::new().title(t("settings.appearance")).item(
+          SettingItem::new(
+            t("settings.theme_title"),
+            SettingField::dropdown(
+              theme_options(),
+              move |cx| theme_get.read(cx).theme_choice().code().unwrap_or("system").into(),
+              move |value, cx| {
+                let choice = ThemeChoice::from_code(Some(value.as_ref()));
+                theme_set.update(cx, |model, cx| model.set_theme(choice, cx));
+              },
+            ),
+          )
+          .description(t("settings.theme_desc")),
         ),
       )
       .group(
@@ -181,6 +199,19 @@ impl Workspace {
 }
 
 /// The language picker entries: the system default first, then each language by its own name.
+fn theme_options() -> Vec<(SharedString, SharedString)> {
+  ThemeChoice::ALL
+    .map(|choice| {
+      let (code, label) = match choice {
+        ThemeChoice::System => ("system", "settings.theme_system"),
+        ThemeChoice::Light => ("light", "settings.theme_light"),
+        ThemeChoice::Dark => ("dark", "settings.theme_dark"),
+      };
+      (code.into(), t(label).into())
+    })
+    .to_vec()
+}
+
 fn language_options() -> Vec<(SharedString, SharedString)> {
   let system = tf("settings.language_system", &[("language", system_language().native_name())]);
   std::iter::once(("system".into(), system.into()))

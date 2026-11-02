@@ -14,6 +14,38 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Developer builds never check for or install published application releases.
 pub const APP_UPDATES_ENABLED: bool = !cfg!(debug_assertions) && cfg!(target_os = "macos");
 
+/// Which appearance the interface uses.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ThemeChoice {
+  /// Follow the computer's light or dark appearance.
+  #[default]
+  System,
+  Light,
+  Dark,
+}
+
+impl ThemeChoice {
+  pub const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
+
+  /// The stored code; `None` for the system appearance.
+  pub fn code(self) -> Option<&'static str> {
+    match self {
+      Self::System => None,
+      Self::Light => Some("light"),
+      Self::Dark => Some("dark"),
+    }
+  }
+
+  /// Unknown codes follow the system appearance.
+  pub fn from_code(code: Option<&str>) -> Self {
+    match code {
+      Some("light") => Self::Light,
+      Some("dark") => Self::Dark,
+      _ => Self::System,
+    }
+  }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AppUpdate {
   Idle,
@@ -138,6 +170,18 @@ impl AppModel {
   pub fn set_language(&mut self, choice: Option<Language>, cx: &mut Context<Self>) {
     self.settings.language = choice.map(|language| language.code().to_string());
     crate::apply_language(choice.unwrap_or_else(system_language));
+    self.save_settings();
+    cx.notify();
+  }
+
+  /// The saved appearance choice.
+  pub fn theme_choice(&self) -> ThemeChoice {
+    ThemeChoice::from_code(self.settings.theme.as_deref())
+  }
+
+  /// Remembers the appearance choice; the interface applies it when notified.
+  pub fn set_theme(&mut self, choice: ThemeChoice, cx: &mut Context<Self>) {
+    self.settings.theme = choice.code().map(str::to_string);
     self.save_settings();
     cx.notify();
   }

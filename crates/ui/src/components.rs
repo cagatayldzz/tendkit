@@ -75,7 +75,7 @@ pub fn selection_checkbox(model: &Entity<AppModel>, tool: &ToolRow, label: bool,
 
 /// A rounded card background used for grouped details.
 pub fn card(cx: &App) -> Div {
-  div().rounded(px(12.)).bg(cx.theme().foreground.opacity(0.035))
+  div().rounded(px(12.)).bg(cx.theme().group_box)
 }
 
 pub fn caption(text: impl Into<SharedString>, cx: &App) -> Div {

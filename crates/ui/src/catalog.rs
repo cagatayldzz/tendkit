@@ -41,12 +41,14 @@ impl Workspace {
     if self.focused_tool.is_some_and(|id| self.visible_tools(cx).iter().any(|tool| tool.id == id)) {
       return v_flex()
         .size_full()
-        .child(div().px_5().pt_3().child(Button::new("back-to-catalog").ghost().small().icon(IconName::ArrowLeft).label(t("catalog.back")).on_click(
-          cx.listener(|this, _, _, cx| {
-            this.focused_tool = None;
-            cx.notify();
-          }),
-        )))
+        .child(h_flex().px_5().pt_3().child(
+          Button::new("back-to-catalog").ghost().small().icon(IconName::ArrowLeft).label(t("catalog.back")).on_click(cx.listener(
+            |this, _, _, cx| {
+              this.focused_tool = None;
+              cx.notify();
+            },
+          )),
+        ))
         .child(div().flex_1().min_h_0().child(self.render_detail(window, cx)))
         .into_any_element();
     }
@@ -244,7 +246,7 @@ impl Workspace {
       } else {
         theme.border
       })
-      .bg(if selected { theme.blue.opacity(0.06) } else { theme.background })
+      .bg(if selected { theme.blue.opacity(0.08) } else { theme.group_box })
       .hover(move |style| style.bg(tint.opacity(0.04)).border_color(tint.opacity(0.4)))
       .child(selection_checkbox(&self.model, tool, false, cx))
       .child(tool_icon(tool, 32., cx))
@@ -305,7 +307,7 @@ impl Workspace {
       .cursor_pointer()
       .border_1()
       .border_color(if active { color.opacity(0.55) } else { theme.border })
-      .bg(if active { color.opacity(0.07) } else { theme.foreground.opacity(0.025) })
+      .bg(if active { color.opacity(0.07) } else { theme.group_box })
       .hover(move |style| style.bg(color.opacity(0.08)))
       .on_click(cx.listener(move |this, _, _, cx| {
         this.catalog_filter = if this.catalog_filter == filter { CatalogFilter::All } else { filter };

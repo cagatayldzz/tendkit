@@ -10,6 +10,7 @@ mod disk;
 mod disk_cleanup;
 mod doctor;
 mod opencommit;
+mod palette;
 mod plan;
 mod platform;
 mod progress;
@@ -25,13 +26,13 @@ use gpui_kit::{
     button::{Button, ButtonVariants},
     h_flex,
     input::{Input, InputEvent, InputState},
-    v_flex, ActiveTheme, Disableable, IconName, Sizable, Theme, TitleBar, WindowExt,
+    v_flex, ActiveTheme, Disableable, IconName, Sizable, Theme, ThemeMode, TitleBar, WindowExt,
   },
   *,
 };
 use std::time::SystemTime;
 use tendkit_i18n::{t, tf};
-use tendkit_model::{AppModel, AppUpdate, APP_UPDATES_ENABLED};
+use tendkit_model::{AppModel, AppUpdate, ThemeChoice, APP_UPDATES_ENABLED};
 
 pub use assets::Assets;
 
@@ -42,22 +43,16 @@ const CONTEXT: &str = "Workspace";
 /// Shared toolbar height; the sidebar starts below the same band.
 pub const TOOLBAR_HEIGHT: Pixels = px(60.);
 
-/// Follows the system appearance and uses the macOS blue accent for primary
-/// controls instead of GPUI Kit's default black.
-fn apply_theme(window: &mut Window, cx: &mut App) {
-  Theme::sync_system_appearance(Some(window), cx);
+/// Follows the system appearance and applies the GitHub Desktop palette.
+fn apply_theme(choice: ThemeChoice, window: &mut Window, cx: &mut App) {
+  match choice {
+    ThemeChoice::System => Theme::sync_system_appearance(Some(window), cx),
+    ThemeChoice::Light => Theme::change(ThemeMode::Light, Some(window), cx),
+    ThemeChoice::Dark => Theme::change(ThemeMode::Dark, Some(window), cx),
+  }
   Theme::update(cx, |theme| {
-    let accent = if theme.is_dark() { hsla(211. / 360., 1., 0.55, 1.) } else { hsla(211. / 360., 1., 0.5, 1.) };
-    theme.blue = accent;
-    theme.primary = accent;
-    theme.primary_hover = accent.opacity(0.9);
-    theme.primary_active = accent.opacity(0.8);
-    theme.primary_foreground = white();
-    theme.button_primary = accent;
-    theme.button_primary_hover = accent.opacity(0.9);
-    theme.button_primary_active = accent.opacity(0.8);
-    theme.button_primary_foreground = white();
-    theme.ring = accent.opacity(0.6);
+    let dark = theme.is_dark();
+    palette::apply(&mut theme.colors, dark);
   });
   window.refresh();
 }
@@ -113,6 +108,7 @@ pub struct Workspace {
   doctor_expanded: std::collections::HashSet<&'static str>,
   /// The release the user was last notified about, so each one is announced once.
   notified_update: Option<String>,
+  applied_theme: ThemeChoice,
   focus_handle: FocusHandle,
   _subscriptions: Vec<Subscription>,
 }
@@ -120,7 +116,8 @@ pub struct Workspace {
 impl Workspace {
   pub fn new(model: Entity<AppModel>, window: &mut Window, cx: &mut Context<Self>) -> Self {
     cx.bind_keys([KeyBinding::new("up", SelectPrevious, Some(CONTEXT)), KeyBinding::new("down", SelectNext, Some(CONTEXT))]);
-    apply_theme(window, cx);
+    let applied_theme = model.read(cx).theme_choice();
+    apply_theme(applied_theme, window, cx);
     let applications = cx.new(|cx| applications::ApplicationsPage::new(model.clone(), window, cx));
     let search = cx.new(|cx| InputState::new(window, cx).placeholder(t("search.placeholder")));
     let disk_search = cx.new(|cx| InputState::new(window, cx).placeholder(t("disk.search")));
@@ -131,7 +128,7 @@ impl Workspace {
           cx.notify();
         }
       }),
-      cx.observe_window_appearance(window, |_, window, cx| apply_theme(window, cx)),
+      cx.observe_window_appearance(window, |this, window, cx| apply_theme(this.applied_theme, window, cx)),
       cx.subscribe(&search, |_, _, event: &InputEvent, cx| {
         if matches!(event, InputEvent::Change) {
           cx.notify();
@@ -140,6 +137,11 @@ impl Workspace {
       cx.observe_in(&model, window, |this, model, window, cx| {
         if model.read(cx).show_plan && !window.has_active_dialog(cx) {
           this.open_plan(window, cx);
+        }
+        let theme = model.read(cx).theme_choice();
+        if theme != this.applied_theme {
+          this.applied_theme = theme;
+          apply_theme(theme, window, cx);
         }
         this.announce_app_update(window, cx);
         cx.notify();
@@ -165,6 +167,7 @@ impl Workspace {
       doctor_scope_expanded: false,
       doctor_expanded: std::collections::HashSet::new(),
       notified_update: None,
+      applied_theme,
       focus_handle,
       _subscriptions: subscriptions,
     }
@@ -274,6 +277,14 @@ impl Workspace {
       _ => tf("toolbar.tools_count", &[("count", &self.visible_tools(cx).len().to_string())]),
     };
     let busy = self.model.read(cx).busy();
+    let focused = (self.destination == Destination::Tools)
+      .then_some(self.focused_tool)
+      .flatten()
+      .and_then(|id| self.visible_tools(cx).into_iter().find(|tool| tool.id == id));
+    let title = focused.as_ref().map_or_else(|| self.destination.title(), |tool| tool.name.to_string());
+    let subtitle = focused.as_ref().map_or(subtitle, |tool| tool.category().title().to_string());
+    let show_search =
+      focused.is_none() && !matches!(self.destination, Destination::Settings | Destination::Doctor | Destination::Disk | Destination::Applications);
     TitleBar::new().h(TOOLBAR_HEIGHT).pl_4().bg(theme.background).border_color(theme.border).child(
       h_flex()
         .w_full()
@@ -284,17 +295,12 @@ impl Workspace {
         .child(
           v_flex()
             .child(
-              div()
-                .text_size(px(15.))
-                .line_height(px(18.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.foreground.opacity(0.85))
-                .child(self.destination.title()),
+              div().text_size(px(15.)).line_height(px(18.)).font_weight(FontWeight::SEMIBOLD).text_color(theme.foreground.opacity(0.85)).child(title),
             )
             .child(div().text_size(px(11.)).line_height(px(13.)).text_color(theme.muted_foreground).child(subtitle)),
         )
         .child(div().flex_1())
-        .when(!matches!(self.destination, Destination::Settings | Destination::Doctor | Destination::Disk | Destination::Applications), |this| {
+        .when(show_search, |this| {
           this
             .child(div().w(px(220.)).child(
               Input::new(&self.search).with_size(component::Size::Medium).prefix(component::Icon::new(IconName::Search).small()).cleanable(true),

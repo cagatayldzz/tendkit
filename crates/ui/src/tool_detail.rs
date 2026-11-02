@@ -9,6 +9,7 @@ use gpui_kit::{
     button::{Button, ButtonVariants},
     h_flex,
     spinner::Spinner,
+    tag::Tag,
     v_flex, ActiveTheme, Disableable, Icon, IconName, Sizable,
   },
   *,
@@ -188,7 +189,13 @@ impl Workspace {
   }
 
   fn status(&self, tool: &ToolRow, cx: &App) -> Div {
-    div().child(status_tag(self.model.read(cx), tool))
+    let model = self.model.read(cx);
+    // The versions are shown in the rows below, so the tag only names the state.
+    let tag = match model.update_status(tool) {
+      Some(UpdateStatus::Available { .. }) if tool.id != "npm" => Tag::warning().small().child(t("detail.update_available")),
+      _ => status_tag(model, tool),
+    };
+    div().child(tag)
   }
 
   fn latest_version(&self, tool: &ToolRow, cx: &mut Context<Self>) -> Div {
