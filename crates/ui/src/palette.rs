@@ -6,6 +6,29 @@ fn hex(value: u32) -> Hsla {
   rgb(value).into()
 }
 
+/// Black or white, whichever reads better on `background`.
+fn on(background: Hsla) -> Hsla {
+  let dark = hex(0x1b1f23);
+  if contrast(dark, background) >= contrast(white(), background) {
+    dark
+  } else {
+    white()
+  }
+}
+
+/// WCAG relative luminance of a colour.
+fn luminance(color: Hsla) -> f32 {
+  let rgba: Rgba = color.into();
+  let channel = |value: f32| if value <= 0.03928 { value / 12.92 } else { ((value + 0.055) / 1.055).powf(2.4) };
+  0.2126 * channel(rgba.r) + 0.7152 * channel(rgba.g) + 0.0722 * channel(rgba.b)
+}
+
+/// WCAG contrast ratio between two colours, from 1 to 21.
+fn contrast(a: Hsla, b: Hsla) -> f32 {
+  let (a, b) = (luminance(a), luminance(b));
+  (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+
 /// The handful of colours every other token is derived from.
 struct Palette {
   background: Hsla,
@@ -19,12 +42,13 @@ struct Palette {
   foreground: Hsla,
   muted_foreground: Hsla,
   accent: Hsla,
+  /// The accent as text or a thin line on the page background.
+  accent_text: Hsla,
   accent_hover: Hsla,
   accent_active: Hsla,
   success: Hsla,
   danger: Hsla,
   warning: Hsla,
-  warning_foreground: Hsla,
   selection: Hsla,
   /// Selected sidebar row. Nested controls such as the submenu caret keep the
   /// normal foreground colour, so the row must stay readable under it.
@@ -43,14 +67,14 @@ impl Palette {
       foreground: hex(0xe1e4e8),
       muted_foreground: hex(0x959da5),
       accent: hex(0x2a63d6),
+      accent_text: hex(0x58a6ff),
       accent_hover: hex(0x3470e8),
       accent_active: hex(0x2253b8),
       success: hex(0x34d058),
       danger: hex(0xf97583),
       warning: hex(0xffd33d),
-      warning_foreground: hex(0x24292e),
       selection: hex(0x2a63d6).opacity(0.45),
-      sidebar_selected: hex(0x2a63d6),
+      sidebar_selected: hex(0x2557c0),
       sidebar_selected_foreground: white(),
     }
   }
@@ -65,15 +89,15 @@ impl Palette {
       foreground: hex(0x24292e),
       muted_foreground: hex(0x586069),
       accent: hex(0x0366d6),
+      accent_text: hex(0x0366d6),
       accent_hover: hex(0x035fc7),
       accent_active: hex(0x0256b4),
-      success: hex(0x28a745),
+      success: hex(0x1a7f37),
       danger: hex(0xcb2431),
       warning: hex(0xdbab09),
-      warning_foreground: hex(0x24292e),
       selection: hex(0x0366d6).opacity(0.25),
       sidebar_selected: hex(0xdbe9f9),
-      sidebar_selected_foreground: hex(0x0366d6),
+      sidebar_selected_foreground: hex(0x044289),
     }
   }
 
@@ -95,7 +119,7 @@ impl Palette {
     colors.description_list_label_foreground = self.muted_foreground;
     colors.selection = self.selection;
     colors.caret = self.foreground;
-    colors.link = self.accent;
+    colors.link = self.accent_text;
     colors.link_hover = self.accent_hover;
     colors.link_active = self.accent_active;
     colors.ring = self.accent.opacity(0.6);
@@ -105,11 +129,11 @@ impl Palette {
     colors.primary = self.accent;
     colors.primary_hover = self.accent_hover;
     colors.primary_active = self.accent_active;
-    colors.primary_foreground = white;
+    colors.primary_foreground = on(self.accent);
     colors.button_primary = self.accent;
     colors.button_primary_hover = self.accent_hover;
     colors.button_primary_active = self.accent_active;
-    colors.button_primary_foreground = white;
+    colors.button_primary_foreground = on(self.accent);
     colors.secondary = self.raised;
     colors.secondary_hover = self.raised.opacity(0.85);
     colors.secondary_active = self.raised.opacity(0.7);
@@ -122,20 +146,20 @@ impl Palette {
     colors.success = self.success;
     colors.success_hover = self.success.opacity(0.9);
     colors.success_active = self.success.opacity(0.8);
-    colors.success_foreground = white;
+    colors.success_foreground = on(self.success);
     colors.danger = self.danger;
     colors.danger_hover = self.danger.opacity(0.9);
     colors.danger_active = self.danger.opacity(0.8);
-    colors.danger_foreground = white;
+    colors.danger_foreground = on(self.danger);
     colors.warning = self.warning;
     colors.warning_hover = self.warning.opacity(0.9);
     colors.warning_active = self.warning.opacity(0.8);
-    colors.warning_foreground = self.warning_foreground;
+    colors.warning_foreground = on(self.warning);
     colors.info = self.accent;
     colors.info_hover = self.accent_hover;
     colors.info_active = self.accent_active;
-    colors.info_foreground = white;
-    colors.blue = self.accent;
+    colors.info_foreground = on(self.accent);
+    colors.blue = self.accent_text;
     colors.green = self.success;
     colors.red = self.danger;
     colors.yellow = self.warning;
@@ -191,3 +215,7 @@ pub fn apply(colors: &mut ThemeColor, dark: bool) {
     Palette::light().apply(colors);
   }
 }
+
+#[cfg(test)]
+#[path = "../tests/palette.rs"]
+mod tests;
