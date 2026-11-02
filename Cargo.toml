@@ -39,6 +39,12 @@ dbg_macro = "warn"
 todo = "deny"
 unimplemented = "deny"
 
+# Smaller, faster release binaries. Panics must keep unwinding: the engine and
+# detection threads rely on catching them at thread joins.
+[profile.release]
+lto = "thin"
+strip = true
+
 # Dependencies (GPUI above all) build without debug info: the target directory
 # and CI cache shrink by gigabytes and linking gets faster. TendKit's own
 # crates keep full debug info.

@@ -95,18 +95,15 @@ impl Workspace {
         SettingGroup::new().title(t("settings.tool_versions")).item(
           SettingItem::new(
             t("settings.refresh_title"),
-            SettingField::render({
+            SettingField::render(move |_, _, cx| {
+              let busy = refresh.read(cx).busy();
               let refresh = refresh.clone();
-              move |_, _, cx| {
-                let busy = refresh.read(cx).busy();
-                let refresh = refresh.clone();
-                Button::new("refresh-tools")
-                  .label(t("action.refresh"))
-                  .icon(IconName::RefreshCw)
-                  .small()
-                  .disabled(busy)
-                  .on_click(move |_, _, cx| refresh.update(cx, |model, cx| model.refresh(cx)))
-              }
+              Button::new("refresh-tools")
+                .label(t("action.refresh"))
+                .icon(IconName::RefreshCw)
+                .small()
+                .disabled(busy)
+                .on_click(move |_, _, cx| refresh.update(cx, |model, cx| model.refresh(cx)))
             }),
           )
           .description(t("settings.refresh_desc")),
@@ -149,7 +146,7 @@ impl Workspace {
         ),
       );
 
-    let about_model = model.clone();
+    let about_model = model;
     let about = SettingPage::new(t("settings.about")).icon(IconName::Info).group(SettingGroup::new().title("TendKit").item(SettingItem::render(
       move |_, _, cx| {
         let last_scan = about_model.read(cx).last_scan.map(platform::local_time).unwrap_or_else(|| "—".into());

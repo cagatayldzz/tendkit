@@ -157,7 +157,7 @@ fn saved_index_round_trips_and_rejects_invalid_cache() {
 
     assert_eq!(fs::metadata(&cache).unwrap().permissions().mode() & 0o777, 0o600);
   }
-  let mut invalid = index.clone();
+  let mut invalid = index;
   invalid.version = 999;
   invalid.save(&cache).unwrap();
   assert!(DiskIndex::load(&cache, &fixture.0).is_none());
