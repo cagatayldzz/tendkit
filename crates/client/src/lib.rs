@@ -7,6 +7,8 @@
 mod connection;
 #[cfg(any(embedded_engine, test))]
 mod embedded;
+// The login shell's PATH is a Unix concept; Windows uses the PATH it inherits.
+#[cfg(unix)]
 mod login_path;
 mod validator;
 
