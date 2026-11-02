@@ -170,6 +170,21 @@ fn run_step(step: &InstallStep, plan: &InstallPlan, work: &WorkDir, state: &Snap
       artifact::install(step, &work.0, &destination, &mut artifact::SystemRunner { control, sink })
     }
 
+    Recipe::Rustup => {
+      // The proxy binaries and rustup itself live side by side in CARGO_HOME/bin.
+      let rustc = binary(state, "rust")?;
+      let rustup = rustc.parent().map(|dir| dir.join("rustup")).filter(|path| path.is_file()).ok_or("rustup was not found next to rustc")?;
+      let args = vec!["update".into(), "stable".into(), "--no-self-update".into()];
+      // The cleared environment would otherwise make rustup fall back to ~/.rustup,
+      // a different toolchain set than the one the plan was built from.
+      let custom: Vec<(&str, String)> = ["RUSTUP_HOME", "CARGO_HOME"]
+        .into_iter()
+        .filter_map(|key| env::var(key).ok().filter(|value| Path::new(value).is_absolute()).map(|value| (key, value)))
+        .collect();
+      let extra: Vec<(&str, &str)> = custom.iter().map(|(key, value)| (*key, value.as_str())).collect();
+      command(&rustup, &args, control, sink, true, timeout, &extra).map(|_| ())
+    }
+
     Recipe::Opencommit { manager } => {
       let args = if manager == "bun" {
         vec!["add".into(), "--global".into(), format!("opencommit@{}", step.target)]

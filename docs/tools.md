@@ -6,7 +6,7 @@
   signature, then opens the macOS Installer. TendKit never asks for a password.
 - **Node/npm** — managed through Homebrew. An existing `node@MAJOR` formula is kept.
 - **Python** — detected with `python3` and managed through Homebrew. Existing versioned Homebrew formulae are kept; installations from other sources stay with their current manager.
-- **Rust** — detected with `rustc` and managed through Homebrew. Existing rustup and other externally managed installations are shown and left with their current manager.
+- **Rust** — detected with `rustc`. New installs and Homebrew installs use Homebrew. A rustup installation whose default toolchain is `stable` is updated with `rustup update stable --no-self-update`; rustup itself is not changed, and the update is verified against the latest Rust release. A nightly, beta, or pinned default toolchain, and other externally managed installations, are shown and left with their own manager.
 - **Bun, Codex, Claude Code** — updated through their existing source (official
   installer or Homebrew), pinned to the approved version.
 - **OpenCommit** — installed with Bun or an existing npm installation; its

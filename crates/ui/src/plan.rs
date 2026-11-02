@@ -18,6 +18,7 @@ use tendkit_protocol::{InstallStep, Recipe, StepAction};
 fn source_label(step: &InstallStep) -> String {
   match &step.recipe {
     Recipe::Homebrew | Recipe::Brew { .. } => "Homebrew".into(),
+    Recipe::Rustup => "rustup".into(),
     Recipe::Opencommit { manager } if manager == "bun" => "Bun".into(),
     Recipe::Opencommit { .. } => "npm".into(),
     Recipe::Bun | Recipe::Codex | Recipe::Claude { .. } => t("plan.source_official"),

@@ -59,7 +59,8 @@ No tools or shell files are changed by planning.
 Plan fields: `selected`, `configure_shell`, `steps`, optional Homebrew `package`,
 `shell_files`, `shell_paths`. Step fields: `id`, `title`, `action`, `target`,
 `recipe`, `before`, `dependencies`. Actions: `install`, `update`, `refresh`, `skip`.
-Recipes are typed operations, never arbitrary shell text. Native targets are
+Recipes are typed operations, never arbitrary shell text (`rustup` carries no
+parameters: the engine runs only `rustup update stable --no-self-update`). Native targets are
 specific versions; Homebrew package metadata is checked again before mutation.
 
 Execute sends the entire unmodified plan in the initial request's `plan` field.

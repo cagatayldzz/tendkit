@@ -88,11 +88,20 @@ pub struct Installation {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Recipe {
   Homebrew,
-  Brew { package: String, cask: bool },
+  Brew {
+    package: String,
+    cask: bool,
+  },
   Bun,
   Codex,
-  Claude { channel: String },
-  Opencommit { manager: String },
+  Claude {
+    channel: String,
+  },
+  /// `rustup update stable` for an existing rustup installation whose default toolchain is stable.
+  Rustup,
+  Opencommit {
+    manager: String,
+  },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

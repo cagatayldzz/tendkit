@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fs};
 
 #[test]
 fn latest_rejects_invalid_selections_before_reading_metadata() {
@@ -95,7 +95,7 @@ fn python_install_adds_homebrew_and_preserves_existing_formula() {
 }
 
 #[test]
-fn rust_uses_homebrew_and_preserves_rustup() {
+fn rust_uses_homebrew_for_new_and_homebrew_installs() {
   let package = InstallPackage { version: "7.0.9".into(), url: "unused".into(), sha256: "unused".into() };
   let plan = build_plan(&["rust".into()], false, &Snapshot::new(), Some(package), |_, _| Ok("1.90.0".into())).unwrap();
   assert_eq!(plan.steps.iter().map(|step| step.id.as_str()).collect::<Vec<_>>(), ["homebrew", "rust"]);
@@ -108,9 +108,71 @@ fn rust_uses_homebrew_and_preserves_rustup() {
   let plan = build_plan(&["rust".into()], false, &state, None, |_, _| Ok("1.90.0".into())).unwrap();
   assert_eq!(plan.steps[1].recipe, Recipe::Brew { package: "rust".into(), cask: false });
   assert_eq!(plan.steps[1].action, StepAction::Update);
-  let state = Snapshot::from([("rust".into(), vec![fixture("1.89.0", "rustup")])]);
-  assert!(!manageable("rust", &state));
-  assert!(build_plan(&["rust".into()], false, &state, None, |_, _| Ok("1.90.0".into())).is_err());
+}
+
+/// `RUSTUP_HOME` is process-wide, so the tests that set it run one at a time.
+fn with_rustup_settings<T>(settings: &str, check: impl FnOnce() -> T) -> T {
+  static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+  let _guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+  let home = std::env::temp_dir().join(format!("tendkit-rustup-{}-{}", std::process::id(), settings.len()));
+  fs::create_dir_all(&home).unwrap();
+  fs::write(home.join("settings.toml"), settings).unwrap();
+  let previous = std::env::var_os("RUSTUP_HOME");
+  std::env::set_var("RUSTUP_HOME", &home);
+  let result = check();
+  match previous {
+    Some(value) => std::env::set_var("RUSTUP_HOME", value),
+    None => std::env::remove_var("RUSTUP_HOME"),
+  }
+  let _ = fs::remove_dir_all(&home);
+  result
+}
+
+#[test]
+fn rustup_with_a_stable_default_is_updated_through_rustup() {
+  with_rustup_settings("version = \"12\"\ndefault_toolchain = \"stable-aarch64-apple-darwin\"\n", || {
+    let state = Snapshot::from([("rust".into(), vec![fixture("1.89.0", "rustup")])]);
+    assert_eq!(manageable("rust", &state), cfg!(target_os = "macos"));
+    let plan = build_plan(&["rust".into()], false, &state, None, |_, recipe| {
+      assert_eq!(recipe, &Recipe::Rustup);
+      Ok("1.90.0".into())
+    })
+    .unwrap();
+    // No Homebrew step: rustup updates itself without it.
+    assert_eq!(plan.steps.iter().map(|step| step.id.as_str()).collect::<Vec<_>>(), ["rust"]);
+    assert_eq!(plan.steps[0].action, StepAction::Update);
+    assert!(plan.steps[0].dependencies.is_empty());
+  });
+}
+
+#[test]
+fn rustup_with_a_nightly_or_pinned_default_is_left_alone() {
+  for toolchain in ["nightly-aarch64-apple-darwin", "1.80.0-aarch64-apple-darwin", "beta"] {
+    with_rustup_settings(&format!("default_toolchain = \"{toolchain}\"\n"), || {
+      let state = Snapshot::from([("rust".into(), vec![fixture("1.89.0", "rustup")])]);
+      assert!(!manageable("rust", &state), "{toolchain}");
+      assert!(build_plan(&["rust".into()], false, &state, None, |_, _| Ok("1.90.0".into())).is_err(), "{toolchain}");
+    });
+  }
+}
+
+#[test]
+fn rustup_without_settings_is_left_alone() {
+  with_rustup_settings("", || {
+    let state = Snapshot::from([("rust".into(), vec![fixture("1.89.0", "rustup")])]);
+    assert!(!manageable("rust", &state));
+  });
+}
+
+#[test]
+fn only_stable_toolchains_count_as_stable() {
+  assert!(is_stable_toolchain("stable"));
+  assert!(is_stable_toolchain("stable-x86_64-apple-darwin"));
+  assert!(!is_stable_toolchain("nightly-x86_64-apple-darwin"));
+  assert!(!is_stable_toolchain("stable-"));
+  assert!(!is_stable_toolchain("1.80.0"));
+  assert_eq!(default_toolchain("default_toolchain = \"stable\""), Some("stable".into()));
+  assert_eq!(default_toolchain("[overrides]"), None);
 }
 
 #[test]
@@ -125,7 +187,11 @@ fn current_bun_is_skipped_and_package_urls_are_restricted() {
 
 #[test]
 fn external_managers_allow_read_only_version_discovery() {
-  for (id, source) in [("node", "nvm"), ("python", "pyenv"), ("rust", "rustup"), ("codex", "npm"), ("claude", "npm")] {
+  // rustup versions come from the Rust release itself, not Homebrew's formula.
+  let rustup = BTreeMap::from([("rust".into(), vec![fixture("1.0.0", "rustup")])]);
+  assert_eq!(latest_recipe("rust", primary(&rustup, "rust"), &rustup), Ok(Recipe::Rustup));
+
+  for (id, source) in [("node", "nvm"), ("python", "pyenv"), ("codex", "npm"), ("claude", "npm")] {
     let state = BTreeMap::from([(id.into(), vec![fixture("1.0.0", source)])]);
     assert!(latest_recipe(id, primary(&state, id), &state).is_ok());
     assert!(!manageable(id, &state));

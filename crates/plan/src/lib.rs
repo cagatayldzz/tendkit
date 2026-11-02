@@ -11,6 +11,25 @@ use tendkit_protocol::{InstallPackage, InstallPlan, InstallStep, Installation, R
 /// Sources whose binary directory TendKit may add to PATH.
 pub const PATH_SOURCES: &[&str] = &["Homebrew", "Bun", "Native"];
 
+/// The default rustup toolchain recorded in `settings.toml`, e.g. `stable-aarch64-apple-darwin`.
+fn rustup_default_toolchain() -> Option<String> {
+  let rustup_home =
+    env::var_os("RUSTUP_HOME").map(PathBuf::from).filter(|path| path.is_absolute()).or_else(|| home().ok().map(|home| home.join(".rustup")))?;
+  default_toolchain(&fs::read_to_string(rustup_home.join("settings.toml")).ok()?)
+}
+
+fn default_toolchain(settings: &str) -> Option<String> {
+  settings.lines().find_map(|line| {
+    let (key, value) = line.split_once('=')?;
+    (key.trim() == "default_toolchain").then(|| value.trim().trim_matches('"').to_owned())
+  })
+}
+
+/// `stable`, or a stable toolchain with its host triple; never nightly, beta, or a pinned version.
+fn is_stable_toolchain(toolchain: &str) -> bool {
+  toolchain == "stable" || toolchain.strip_prefix("stable-").is_some_and(|triple| !triple.is_empty() && !triple.contains(char::is_whitespace))
+}
+
 fn shell_files() -> Result<Vec<String>, String> {
   let home = home()?;
   let dir = env::var_os("ZDOTDIR").map(PathBuf::from).map(|p| if p.is_absolute() { p } else { home.join(p) }).unwrap_or(home);
@@ -67,6 +86,8 @@ fn recipe(id: &str, installed: Option<&Installation>, state: &Snapshot) -> Resul
     ("node", None) => Ok(Recipe::Brew { package: "node".into(), cask: false }),
     ("python", None) => Ok(Recipe::Brew { package: "python3".into(), cask: false }),
     ("rust", None) => Ok(Recipe::Brew { package: "rust".into(), cask: false }),
+    ("rust", Some("rustup")) if rustup_default_toolchain().is_some_and(|toolchain| is_stable_toolchain(&toolchain)) => Ok(Recipe::Rustup),
+    ("rust", Some("rustup")) => Err("rust: The default rustup toolchain is not stable. Update it with rustup.".into()),
     ("bun", None | Some("Bun")) => Ok(Recipe::Bun),
     ("codex", None | Some("Native")) => Ok(Recipe::Codex),
     ("claude", None | Some("Native")) => {
@@ -301,6 +322,7 @@ fn resolve(recipe: &Recipe, package: Option<&InstallPackage>, sink: &mut Sink) -
       Some(curl(&format!("https://downloads.claude.ai/claude-code-releases/{channel}"), None, &Control::default(), sink)?.trim().to_owned())
     }
     Recipe::Opencommit { .. } => get_json("https://registry.npmjs.org/opencommit/latest", sink)?["version"].as_str().map(str::to_string),
+    Recipe::Rustup => get_json("https://api.github.com/repos/rust-lang/rust/releases/latest", sink)?["tag_name"].as_str().map(str::to_string),
   }
   .ok_or("Target version not found")?;
   if !valid_version(&value) {
@@ -324,6 +346,9 @@ pub fn prepare(selected: &[String], configure_shell: bool, sink: &mut Sink) -> R
 fn latest_recipe(id: &str, installed: Option<&Installation>, state: &Snapshot) -> Result<Recipe, String> {
   if installed.is_some_and(|i| i.source == "Homebrew") {
     return recipe(id, installed, state);
+  }
+  if id == "rust" && installed.is_some_and(|i| i.source == "rustup") {
+    return Ok(Recipe::Rustup);
   }
   match id {
     "node" => Ok(Recipe::Brew { package: "node".into(), cask: false }),
