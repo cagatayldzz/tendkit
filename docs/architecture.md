@@ -216,15 +216,22 @@ the folder (or a file's parent), passing paths directly as process arguments.
 
 ## Reviewed disk cleanup
 
-The macOS disk toolbar opens a review dialog populated only from indexed
-locations inside the current user's home. `storage::cleanup` validates paths
+The macOS and Linux disk toolbar opens a review dialog combining project candidates from
+the disk index with a separate, bounded scan of default Bun, npm, pip, and uv
+cache paths. macOS also includes Homebrew downloads and Xcode DerivedData,
+which require manual selection. Linux uses `gio trash` and reports failures
+without falling back to permanent deletion. Custom cache paths are not discovered. Failed or incomplete cache
+measurements are omitted and reported; scans do not follow symlinks. Project candidates also come from indexed locations inside the current user's home.
+A user can explicitly select a project in Desktop, Documents, or Downloads;
+only its immediate verified outputs are offered, initially unselected. Protected
+system, Library, hidden tool, and version-control locations stay excluded. `storage::cleanup` validates paths
 and project markers on a background task, captures directory identity, and
 revalidates immediately before each move. It excludes protected personal
 folders, hidden tool roots (except the exact Bun package cache), VCS data,
 symlinks and symlinked ancestors. Nested proposals are collapsed to avoid
 overlapping moves. No new disk locations are scanned for cleanup.
 
-Bun's `.bun/install/cache` and Rust `target` directories with a sibling
+Bun, npm, pip and uv caches, and Rust `target` directories with a sibling
 `Cargo.toml` and a valid `CACHEDIR.TAG` are recommended and preselected.
 `node_modules` beside `package.json` and `.venv` with `pyvenv.cfg` require
 manual selection because removing them can disrupt project environments.

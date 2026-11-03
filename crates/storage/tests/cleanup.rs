@@ -151,3 +151,96 @@ fn paths_outside_home_are_rejected_and_backend_failures_are_preserved() {
   assert_eq!(move_to_trash(&candidate, &fixture.0, |_| Err("Trash unavailable".into())), Err("Trash unavailable".into()));
   assert!(candidate.path.exists());
 }
+
+#[test]
+fn default_cache_discovery_works_without_a_disk_index_and_rejects_other_paths() {
+  let fixture = Fixture::new();
+  let mut paths = vec![(".bun/install/cache", CleanupKind::BunCache), (".npm/_cacache", CleanupKind::NpmCache)];
+  if cfg!(target_os = "macos") {
+    paths.extend([("Library/Caches/pip", CleanupKind::PipCache), ("Library/Caches/uv", CleanupKind::UvCache)]);
+  } else if cfg!(target_os = "linux") {
+    paths.extend([(".cache/pip", CleanupKind::PipCache), (".cache/uv", CleanupKind::UvCache)]);
+  }
+  let expected = paths.len();
+  for (path, kind) in paths {
+    let candidate = fixture.candidate(path, kind);
+    fs::write(candidate.path.join("entry"), b"cached data").unwrap();
+  }
+  let (candidates, skipped) = discover_caches(&fixture.0);
+  assert_eq!(skipped, 0);
+  assert_eq!(candidates.len(), expected);
+  for candidate in candidates {
+    assert!(candidate.validate(&fixture.0).is_ok());
+  }
+  let forged = fixture.candidate("Library/Caches/other", CleanupKind::PipCache);
+  assert!(prepare(vec![forged], &fixture.0).is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn discovery_reports_symlinked_cache_without_following_it() {
+  use std::os::unix::fs::symlink;
+
+  let fixture = Fixture::new();
+  let other = Fixture::new();
+  fs::create_dir_all(fixture.0.join(".npm")).unwrap();
+  symlink(&other.0, fixture.0.join(".npm/_cacache")).unwrap();
+  let (candidates, skipped) = discover_caches(&fixture.0);
+  assert!(candidates.is_empty());
+  assert_eq!(skipped, 1);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn xcode_and_homebrew_candidates_require_manual_selection_and_exact_paths() {
+  let fixture = Fixture::new();
+  let brew = fixture.candidate("Library/Caches/Homebrew/downloads", CleanupKind::HomebrewCache);
+  let xcode = fixture.candidate("Library/Developer/Xcode/DerivedData", CleanupKind::XcodeDerivedData);
+  let (candidates, skipped) = discover_caches(&fixture.0);
+  assert_eq!(skipped, 0);
+  assert_eq!(candidates.len(), 2);
+  assert!(!brew.kind.recommended());
+  assert!(!xcode.kind.recommended());
+  assert!(candidates.iter().all(|candidate| candidate.validate(&fixture.0).is_ok()));
+  let wrong = fixture.candidate("Library/Developer/Xcode/Archives", CleanupKind::XcodeDerivedData);
+  assert!(prepare(vec![wrong], &fixture.0).is_empty());
+}
+
+#[test]
+fn selected_project_in_documents_discovers_only_verified_direct_outputs() {
+  let fixture = Fixture::new();
+  let project = fixture.0.join("Documents/example");
+  fs::create_dir_all(project.join("node_modules")).unwrap();
+  fs::create_dir_all(project.join(".venv")).unwrap();
+  fs::write(project.join("package.json"), b"{}").unwrap();
+  fs::write(project.join("pyproject.toml"), b"[project]").unwrap();
+  fs::write(project.join(".venv/pyvenv.cfg"), b"home = /example").unwrap();
+  let (candidates, skipped) = discover_project(&project, &fixture.0).unwrap();
+  assert_eq!(skipped, 0);
+  assert_eq!(candidates.len(), 2);
+  let python = candidates.iter().find(|candidate| candidate.kind == CleanupKind::PythonEnvironment).unwrap();
+  fs::remove_file(project.join("pyproject.toml")).unwrap();
+  assert!(python.validate(&fixture.0).is_err());
+  assert!(discover_project(&fixture.0, &fixture.0).is_err());
+  let outside = Fixture::new();
+  assert!(discover_project(&outside.0, &fixture.0).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn selected_project_rejects_symlinked_paths_and_protected_library() {
+  use std::os::unix::fs::symlink;
+
+  let fixture = Fixture::new();
+  let project = fixture.0.join("Documents/project");
+  fs::create_dir_all(project.join("node_modules")).unwrap();
+  fs::write(project.join("package.json"), b"{}").unwrap();
+  symlink(&project, fixture.0.join("project-link")).unwrap();
+  assert!(discover_project(&fixture.0.join("project-link"), &fixture.0).is_err());
+  let protected = fixture.0.join("Library/project");
+  fs::create_dir_all(protected.join("node_modules")).unwrap();
+  fs::write(protected.join("package.json"), b"{}").unwrap();
+  let (candidates, skipped) = discover_project(&protected, &fixture.0).unwrap();
+  assert!(candidates.is_empty());
+  assert_eq!(skipped, 1);
+}

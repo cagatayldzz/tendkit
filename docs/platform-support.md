@@ -14,7 +14,9 @@ coverage claim and does not include phones, tablets, or ChromeOS.
 | Linux with glibc 2.39 or newer | Intel/AMD 64-bit | `TendKit-VERSION-linux-x64.tar.gz` | Portable layout; system libraries required |
 
 Windows and Linux previews provide tool discovery, environment inspection, and
-disk usage indexing. Tool installation and application self-updates are currently
+disk usage indexing. Linux also provides reviewed cleanup of supported user caches
+through the desktop `gio trash` command; it requires a working desktop Trash service.
+Tool installation and application self-updates are currently
 available on macOS only. Use the original tool manager and download application
 updates manually on preview platforms. Other Linux distributions are not yet
 validated; the tar archive is not a self-contained AppImage.

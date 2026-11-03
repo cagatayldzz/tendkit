@@ -84,14 +84,14 @@ impl Workspace {
             }),
           ))
           .child(div().flex_1().min_w_0().overflow_hidden().child(crumbs))
-          .when(cfg!(target_os = "macos"), |row| {
+          .when(cfg!(any(target_os = "macos", target_os = "linux")), |row| {
             row.child(
               Button::new("disk-cleanup")
                 .ghost()
                 .small()
                 .icon(Lucide::Trash)
                 .label(t("cleanup.open"))
-                .disabled(scanning || disk.index.is_none() || self.model.read(cx).busy())
+                .disabled(scanning || self.model.read(cx).busy())
                 .on_click(cx.listener(|this, _, window, cx| this.open_disk_cleanup(window, cx))),
             )
           })

@@ -149,10 +149,20 @@ pub fn trash_directory(path: &std::path::Path) -> Result<(), String> {
     NSFileManager::defaultManager().trashItemAtURL_resultingItemURL_error(&url, None).map_err(|error| error.to_string())
   }
 
-  #[cfg(not(target_os = "macos"))]
+  #[cfg(target_os = "linux")]
+  {
+    let status = std::process::Command::new("gio").arg("trash").arg("--").arg(path).status().map_err(|error| error.to_string())?;
+    if status.success() {
+      Ok(())
+    } else {
+      Err(format!("The desktop Trash service failed: {status}"))
+    }
+  }
+
+  #[cfg(not(any(target_os = "macos", target_os = "linux")))]
   {
     let _ = path;
-    Err("Moving cleanup items to Trash is available on macOS only.".into())
+    Err("Moving cleanup items to Trash is not supported on this platform.".into())
   }
 }
 

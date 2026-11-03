@@ -28,11 +28,18 @@ struct DiskCleanup {
   busy: bool,
   completed: bool,
   error: Option<String>,
+  skipped: usize,
+  project_notice: Option<&'static str>,
 }
 
 fn category(kind: CleanupKind) -> &'static str {
   match kind {
     CleanupKind::BunCache => "cleanup.bun",
+    CleanupKind::NpmCache => "cleanup.npm",
+    CleanupKind::PipCache => "cleanup.pip",
+    CleanupKind::UvCache => "cleanup.uv",
+    CleanupKind::HomebrewCache => "cleanup.brew",
+    CleanupKind::XcodeDerivedData => "cleanup.xcode",
     CleanupKind::RustTarget => "cleanup.rust",
     CleanupKind::NodeModules => "cleanup.node",
     CleanupKind::PythonEnvironment => "cleanup.python",
@@ -41,11 +48,19 @@ fn category(kind: CleanupKind) -> &'static str {
 
 impl DiskCleanup {
   fn new(proposals: Vec<CleanupCandidate>, model: Entity<AppModel>, cx: &mut Context<Self>) -> Self {
-    let task = cx.background_executor().spawn(async move { cleanup::prepare(proposals, &tendkit_storage::paths::home_dir()) });
+    let task = cx.background_executor().spawn(async move {
+      let home = tendkit_storage::paths::home_dir();
+      let (caches, skipped) = cleanup::discover_caches(&home);
+      let mut candidates = cleanup::prepare(proposals.into_iter().filter(|candidate| candidate.kind != CleanupKind::BunCache).collect(), &home);
+      candidates.extend(caches);
+      candidates.sort_by(|a, b| b.bytes.cmp(&a.bytes).then_with(|| a.path.cmp(&b.path)));
+      (candidates, skipped)
+    });
     cx.spawn(async move |this, cx| {
-      let candidates = task.await;
+      let (candidates, skipped) = task.await;
       let _ = this.update(cx, |this, cx| {
         this.loading = false;
+        this.skipped = skipped;
         this.rows = candidates
           .into_iter()
           .map(|candidate| CleanupRow { selected: candidate.kind.recommended(), candidate, moved: false, error: None })
@@ -54,7 +69,51 @@ impl DiskCleanup {
       });
     })
     .detach();
-    Self { model, rows: Vec::new(), loading: true, busy: false, completed: false, error: None }
+    Self { model, rows: Vec::new(), loading: true, busy: false, completed: false, error: None, skipped: 0, project_notice: None }
+  }
+
+  fn choose_project(&mut self, cx: &mut Context<Self>) {
+    if self.loading || self.busy {
+      return;
+    }
+    let receiver =
+      cx.prompt_for_paths(PathPromptOptions { files: false, directories: true, multiple: false, prompt: Some(t("cleanup.choose_project").into()) });
+    let executor = cx.background_executor().clone();
+    self.loading = true;
+    self.project_notice = None;
+    cx.notify();
+    cx.spawn(async move |this, cx| {
+      let selection = receiver.await;
+      let result = match selection {
+        Ok(Ok(Some(paths))) if !paths.is_empty() => {
+          let project = paths[0].clone();
+          Some(executor.spawn(async move { cleanup::discover_project(&project, &tendkit_storage::paths::home_dir()) }).await)
+        }
+        Ok(Ok(_)) => None,
+        _ => Some(Err(String::new())),
+      };
+      let _ = this.update(cx, |this, cx| {
+        this.loading = false;
+        if let Some(result) = result {
+          match result {
+            Ok((candidates, skipped)) => {
+              this.skipped += skipped;
+              let mut added = 0;
+              for candidate in candidates {
+                if !this.rows.iter().any(|row| row.candidate.path == candidate.path) {
+                  this.rows.push(CleanupRow { candidate, selected: false, moved: false, error: None });
+                  added += 1;
+                }
+              }
+              this.project_notice = Some(if added == 0 { "cleanup.project_empty" } else { "cleanup.project_added" });
+            }
+            Err(_) => this.project_notice = Some("cleanup.project_error"),
+          }
+        }
+        cx.notify();
+      });
+    })
+    .detach();
   }
 
   fn move_selected(&mut self, cx: &mut Context<Self>) {
@@ -124,7 +183,11 @@ impl Render for DiskCleanup {
     }
     for (index, row) in self.rows.iter().enumerate() {
       let path_tip = row.candidate.path.to_string_lossy().into_owned();
-      let description = if row.candidate.kind.recommended() { "cleanup.cache_effect" } else { "cleanup.environment_effect" };
+      let description = match row.candidate.kind {
+        CleanupKind::HomebrewCache | CleanupKind::XcodeDerivedData => "cleanup.manual_cache_effect",
+        kind if kind.recommended() => "cleanup.cache_effect",
+        _ => "cleanup.environment_effect",
+      };
       let mut item = v_flex()
         .gap_1()
         .p_3()
@@ -172,6 +235,18 @@ impl Render for DiskCleanup {
           .gap_3()
           .child(div().text_sm().child(t("cleanup.scope")))
           .child(div().text_xs().text_color(theme.muted_foreground).child(t("cleanup.note")))
+          .when(self.skipped > 0, |view| {
+            view.child(div().text_sm().text_color(theme.danger).child(tf("cleanup.skipped", &[("count", &self.skipped.to_string())])))
+          })
+          .when_some(self.project_notice, |view, notice| view.child(div().text_sm().child(t(notice))))
+          .child(
+            Button::new("cleanup-project")
+              .ghost()
+              .small()
+              .label(t("cleanup.choose_project"))
+              .disabled(locked)
+              .on_click(cx.listener(|this, _, _, cx| this.choose_project(cx))),
+          )
           .child(
             h_flex()
               .gap_2()
@@ -228,8 +303,7 @@ impl Workspace {
     if self.model.read(cx).disk.scanning || self.model.read(cx).busy() {
       return;
     }
-    let Some(index) = &self.model.read(cx).disk.index else { return };
-    let proposals = index.cleanup_proposals();
+    let proposals = self.model.read(cx).disk.index.as_ref().map(|index| index.cleanup_proposals()).unwrap_or_default();
     let model = self.model.clone();
     let cleanup = cx.new(|cx| DiskCleanup::new(proposals, model, cx));
     window.open_dialog(cx, move |dialog, _, _| {
