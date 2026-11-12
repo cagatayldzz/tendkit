@@ -1,4 +1,4 @@
-# <img src="apps/tendkit-icon/icon.svg" alt="" width="48" align="absmiddle"> TendKit
+# <img src="apps/tendkit-icon/icon.png" alt="" width="48" align="absmiddle"> TendKit
 
 A native macOS developer environment manager, built with Rust and [GPUI](https://gpui.rs).
 
