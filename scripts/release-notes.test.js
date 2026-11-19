@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { generateNotes, maxCommits, nextVersion, releaseBump, renderNotes, validateItems } from "./release-notes.js";
+import { classifyCommits, nextVersion, noteSection, releaseBump, renderNotes, validateItems } from "./release-notes.js";
 
 const commits = [
   { sha: "a".repeat(40), subject: "feat: add native window (#12)" },
@@ -30,7 +30,7 @@ describe("release version selection", () => {
   });
 });
 
-test("AI notes cannot omit or duplicate commits or invent references", () => {
+test("notes cannot omit or duplicate commits or invent references", () => {
   expect(() => validateItems(items.slice(0, 1), 2)).toThrow();
   expect(() => validateItems([items[0], items[0]], 2)).toThrow();
   expect(() => validateItems([items[0], { ...items[1], id: 9 }], 2)).toThrow();
@@ -49,38 +49,20 @@ test("notes contain every section, source links and a complete changelog", () =>
     .toContain("https://github.com/owner/repo/commits/v0.3.0");
 });
 
-test("one bounded API call sends titles and parses structured output", async () => {
-  let calls = 0;
-  const fetcher = async (url, options) => {
-    calls += 1;
-    expect(url).toBe("https://api.openai.com/v1/responses");
-    const body = JSON.parse(options.body);
-    expect(body.model).toBe("gpt-4o-mini");
-    expect(body.max_output_tokens).toBe(2400);
-    expect(body.store).toBe(false);
-    expect(body.text.format.strict).toBe(true);
-    expect(JSON.parse(body.input)).toEqual(commits.map((commit, id) => ({ id, title: commit.subject })));
-    return Response.json({
-      status: "completed",
-      output: [{ content: [{ type: "output_text", text: JSON.stringify({ items }) }] }],
-      usage: { input_tokens: 120, output_tokens: 60 }
-    });
-  };
-  expect((await generateNotes(commits, "test-key", fetcher)).items).toEqual(items);
-  expect(calls).toBe(1);
+test("commit titles are grouped by their type and kept as written", () => {
+  expect(noteSection("feat: add native window")).toBe("New Features");
+  expect(noteSection("feat(app)!: replace protocol")).toBe("New Features");
+  expect(noteSection("fix: preserve output")).toBe("Bug Fixes");
+  expect(noteSection("docs: explain releases")).toBe("Documentation");
+  expect(noteSection("refactor: split engine")).toBe("Chores");
+  expect(noteSection("Update the readme")).toBe("Chores");
+  expect(classifyCommits(commits)).toEqual([
+    { id: 0, section: "New Features", summary: "feat: add native window (#12)" },
+    { id: 1, section: "Bug Fixes", summary: "fix: preserve engine output" }
+  ]);
 });
 
-test("missing secrets, empty changes and oversized releases fail before billing", async () => {
-  const neverFetch = () => { throw new Error("Must not call the API"); };
-  await expect(generateNotes(commits, "", neverFetch)).rejects.toThrow("OPENAI_API_KEY");
-  await expect(generateNotes([], "test-key", neverFetch)).rejects.toThrow("no changes");
-  await expect(generateNotes(Array(maxCommits + 1).fill(commits[0]), "test-key", neverFetch))
-    .rejects.toThrow("limited");
-});
-
-test("API failures and truncated output stop release generation", async () => {
-  await expect(generateNotes(commits, "test-key", async () => new Response("sensitive details", { status: 429 })))
-    .rejects.toThrow("HTTP 429");
-  await expect(generateNotes(commits, "test-key", async () => Response.json({ status: "incomplete" })))
-    .rejects.toThrow("did not complete");
+test("a release with no commits is refused, and any number of commits is accepted", () => {
+  expect(() => classifyCommits([])).toThrow("no changes");
+  expect(classifyCommits(Array(200).fill(commits[0]))).toHaveLength(200);
 });

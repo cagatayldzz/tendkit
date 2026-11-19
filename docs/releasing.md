@@ -8,7 +8,7 @@ run `bun run release` from a clean `main` (requires `gh auth login`), or start
 
 The version bump is derived from commit messages since the last tag
 (`feat:` → minor, `type!:` / `BREAKING CHANGE:` → major, otherwise patch).
-Release notes are generated from commit titles with OpenAI. Native build jobs
+Release notes are written from commit titles, grouped by their type; nothing is sent to an outside service. Native build jobs
 produce macOS Apple Silicon and Intel ZIPs, a Windows x64 ZIP, and Linux x64
 TAR/DEB packages. Both macOS apps are signed with Developer ID and notarized.
 A combined `SHA256SUMS.txt` covers all five packages. Nothing is published unless
@@ -44,7 +44,6 @@ Required repository secrets:
 
 | Secret | Purpose |
 | --- | --- |
-| `OPENAI_API_KEY` | Release notes |
 | `APPLE_CERTIFICATE_BASE64` | Base64-encoded Developer ID Application `.p12` |
 | `APPLE_CERTIFICATE_PASSWORD` | Password for the `.p12` |
 | `APPLE_ID` | Apple Developer account email |

@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { generateNotes, maxCommits, nextVersion, releaseBump, renderNotes } from "./release-notes.js";
+import { classifyCommits, nextVersion, releaseBump, renderNotes } from "./release-notes.js";
 
 process.chdir(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -25,7 +25,6 @@ try {
     const commits = git("log", "--reverse", "--format=%H%x09%s", range).split("\n").filter(Boolean)
       .map((line) => ({ sha: line.slice(0, 40), subject: line.slice(41) }));
     if (!commits.length) throw new Error("There are no changes since the previous release.");
-    if (commits.length > maxCommits) throw new Error(`This release exceeds the ${maxCommits}-commit AI budget.`);
     const bump = releaseBump(git("log", "--format=%B%x00", range).split("\0").map((message) => message.trim()));
     const version = nextVersion(previousTag?.slice(1) ?? pkg.version, bump);
     const tag = `v${version}`;
@@ -51,9 +50,8 @@ try {
     console.log(`Preparing ${tag} (${bump}) from ${commits.length} commits.`);
   } else if (process.argv[2] === "notes") {
     const context = JSON.parse(readFileSync("dist/release-context.json", "utf8"));
-    const { items, usage } = await generateNotes(context.commits, process.env.OPENAI_API_KEY);
+    const items = classifyCommits(context.commits);
     writeFileSync("dist/RELEASE_NOTES.md", renderNotes({ ...context, items, repository: process.env.GITHUB_REPOSITORY }));
-    if (usage) console.log(`AI tokens: input=${usage.input_tokens}, output=${usage.output_tokens}`);
   } else {
     throw new Error("Usage: bun scripts/release-ci.js [prepare|notes]");
   }
