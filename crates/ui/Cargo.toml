@@ -10,10 +10,6 @@ license.workspace = true
 repository.workspace = true
 description = "TendKit interface views built with GPUI Kit"
 
-[package.metadata.layers]
-# Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["tendkit-i18n", "tendkit-model", "tendkit-protocol", "tendkit-storage", "tendkit-updater", "gpui-kit", "gpui-kit-assets", "libc", "objc2-foundation", "objc2-app-kit"]
-
 [lints]
 workspace = true
 

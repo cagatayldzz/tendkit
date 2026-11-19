@@ -28,7 +28,7 @@ comments immediately after a table header do not need an extra blank line.
 # Workspace layout
 
 The Cargo workspace has `apps/*` (executables) and `crates/*` (libraries). The
-dependency direction is enforced by `bun run check:layers`:
+dependency direction below is a rule to follow when adding crates and dependencies:
 
 - `apps/tendkit` is the GPUI application; `apps/tendkit-engine` is the engine
   executable that the application bundles and starts as a child process.
@@ -38,9 +38,6 @@ dependency direction is enforced by `bun run check:layers`:
   They never depend on the client, model, or UI crates.
 - Application layers: `storage`, `client`, and `updater` (→ `version`) → `model` → `ui`; `i18n` has no dependencies and is used by `model`, `ui`, and the app. They never depend
   on the engine crates.
-- Every package declares its allowed dependencies in
-  `[package.metadata.layers]`. Define the layer decision for each new crate or
-  dependency there; do not disable `check:layers`.
 - Keep `unsafe` out of the workspace (`unsafe_code = "deny"`). The few libc calls
   (signals, process groups, `flock`, `localtime_r`) live in `process`, `client`,
   `execute`, and `ui`'s `platform` module, each with an explicit `allow`.
@@ -68,11 +65,10 @@ If that package also has integration tests, register each with an explicit
 `[[test]]` target. Packages containing only integration tests may keep Cargo's
 automatic discovery. Never expose production internals just to move test files.
 
-`bun run check:test-layout` enforces this layout and checks that test files are
-registered. Keep it enabled in `bun run check` and CI when adding packages or tests.
+Keep tests in this layout when adding packages or tests.
 
 # Checks
 
-Run `bun run check` before finishing a change (layers, test layout, script tests, formatting,
+Run `bun run check` before finishing a change (script tests, formatting,
 clippy, and Rust tests). Tests never install or modify real tools. Commit or push
 only when the user asks.

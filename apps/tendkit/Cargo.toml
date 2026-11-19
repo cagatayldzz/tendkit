@@ -8,10 +8,6 @@ repository.workspace = true
 description = "TendKit macOS application"
 default-run = "TendKit"
 
-[package.metadata.layers]
-# Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["tendkit-i18n", "tendkit-ui", "tendkit-model", "tendkit-storage", "gpui-kit"]
-
 [lints]
 workspace = true
 

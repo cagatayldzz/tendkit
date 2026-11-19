@@ -10,10 +10,6 @@ license.workspace = true
 repository.workspace = true
 description = "TendKit application state shared by the interface"
 
-[package.metadata.layers]
-# Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["tendkit-i18n", "tendkit-client", "tendkit-protocol", "tendkit-storage", "tendkit-updater", "tendkit-version", "futures", "gpui-kit"]
-
 [lints]
 workspace = true
 

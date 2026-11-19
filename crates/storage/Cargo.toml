@@ -10,10 +10,6 @@ license.workspace = true
 repository.workspace = true
 description = "TendKit per-user files: paths, caches, window size, and OpenCommit configuration"
 
-[package.metadata.layers]
-# Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["serde", "serde_json", "libc"]
-
 [lints]
 workspace = true
 

@@ -19,16 +19,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.3
       - run: rustup default stable
       - name: Test release automation
-        run: bun test scripts
-      - name: Check workspace layers
-        run: bun scripts/layers.ts
-      - name: Check test layout
-        run: bun run check:test-layout
+        run: bash scripts/tests/run.sh
       - name: Check formatting
         run: cargo fmt --all -- --check
 

@@ -8,10 +8,6 @@ license.workspace = true
 repository.workspace = true
 description = "TendKit engine client: process connection and event validation"
 
-[package.metadata.layers]
-# Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["tendkit-protocol", "serde_json", "libc"]
-
 [lints]
 workspace = true
 

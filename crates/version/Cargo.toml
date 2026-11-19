@@ -10,10 +10,6 @@ license.workspace = true
 repository.workspace = true
 description = "TendKit version comparison"
 
-[package.metadata.layers]
-# Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = []
-
 [lints]
 workspace = true
 

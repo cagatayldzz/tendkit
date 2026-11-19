@@ -56,7 +56,7 @@ ditto -c -k --sequesterRsrc --keepParent "$app_dir" "$signing_dir/notarization.z
 xcrun notarytool submit "$signing_dir/notarization.zip" \
   --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" \
   --wait --timeout 20m --output-format json > "$signing_dir/notarization.json"
-status="$(ruby -rjson -e 'puts JSON.parse(File.read(ARGV[0])).fetch("status")' "$signing_dir/notarization.json")"
+status="$(plutil -extract status raw -o - "$signing_dir/notarization.json")"
 if [[ "$status" != Accepted ]]; then
   echo "Apple notarization was not accepted (status: $status). No release will be published." >&2
   exit 1

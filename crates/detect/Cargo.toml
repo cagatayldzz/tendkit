@@ -10,10 +10,6 @@ license.workspace = true
 repository.workspace = true
 description = "TendKit tool registry and installation detection"
 
-[package.metadata.layers]
-# Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["tendkit-process", "tendkit-protocol"]
-
 [lints]
 workspace = true
 

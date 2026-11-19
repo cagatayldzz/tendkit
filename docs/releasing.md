@@ -1,6 +1,6 @@
 # Releasing
 
-CI runs script checks, formatting, layers, and core Rust tests on Ubuntu for
+CI runs the script tests, formatting, and core Rust tests on Ubuntu for
 every push to `main` and pull request. A newer push cancels outdated CI runs.
 Full macOS and Windows application checks run as part of the release workflow. To publish a release,
 run `bun run release` from a clean `main` (requires `gh auth login`), or start

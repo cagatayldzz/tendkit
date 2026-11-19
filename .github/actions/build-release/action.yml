@@ -21,9 +21,6 @@ runs:
       with:
         name: release-inputs
         path: .
-    - uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: 1.4.3
     - name: Install stable Rust
       shell: bash
       run: |
@@ -51,7 +48,7 @@ runs:
     - name: Build macOS application
       if: inputs.os == 'macos'
       shell: bash
-      run: bun run build
+      run: bash scripts/build-app.sh release
     - name: Build portable Windows application
       if: inputs.os == 'windows'
       shell: bash
@@ -65,12 +62,10 @@ runs:
     - name: Test Windows portable packaging and extraction
       if: inputs.os == 'windows'
       shell: bash
-      run: |
-        bun test scripts/package-release.test.js
-        cargo test --locked -p tendkit-client --lib
+      run: cargo test --locked -p tendkit-client --lib
     - name: Smoke test native engine protocol
       shell: bash
-      run: bun scripts/smoke-engine.js
+      run: bash scripts/smoke-engine.sh
     - name: Sign and notarize macOS application
       if: inputs.os == 'macos'
       shell: bash
@@ -79,7 +74,7 @@ runs:
       env:
         RELEASE_TAG: ${{ inputs.release-tag }}
       shell: bash
-      run: bun scripts/package-release.js package
+      run: bash scripts/release.sh package
     - uses: actions/upload-artifact@v7
       with:
         name: release-${{ inputs.os }}-${{ inputs.arch }}

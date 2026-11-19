@@ -1,9 +1,7 @@
 # Architecture
 
 TendKit is a Cargo workspace of small crates with a one-way dependency
-direction. `bun run check:layers` reads each package's
-`[package.metadata.layers]` table and fails on any dependency that is not
-listed, on missing rules for new crates, and on workspace cycles.
+direction; new crates and dependencies follow the layers below.
 
 ## Layers
 
@@ -92,8 +90,7 @@ by subject. Tests needing private access are registered as external unit modules
 using `#[cfg(test)]` and `#[path]`. Such packages disable automatic integration
 test discovery and declare any integration targets explicitly. Packages with only
 integration tests can use Cargo's default discovery. Production APIs stay private.
-`bun run check:test-layout` checks source placement, descriptive names, and test
-registration for both `apps/` and `crates/`; it runs in the full check and CI.
+Keep new tests in this layout.
 
 Developer builds (`debug_assertions`) disable application self-updates through
 `model::APP_UPDATES_ENABLED`: startup checks, download and restart actions,

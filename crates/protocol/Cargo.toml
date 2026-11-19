@@ -7,10 +7,6 @@ license.workspace = true
 repository.workspace = true
 description = "TendKit engine protocol: shared wire models, event decoding, and requests"
 
-[package.metadata.layers]
-# Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["serde", "serde_json"]
-
 [lints]
 workspace = true
 

@@ -7,9 +7,6 @@ license.workspace = true
 repository.workspace = true
 description = "Development tool for rendering TendKit app icons"
 
-[package.metadata.layers]
-dependencies = ["resvg"]
-
 [dependencies]
 resvg = { version = "0.46", default-features = false }
 

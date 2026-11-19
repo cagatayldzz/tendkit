@@ -10,10 +10,6 @@ license.workspace = true
 repository.workspace = true
 description = "TendKit installation planning and release resolution"
 
-[package.metadata.layers]
-# Layer check (`bun run check:layers`): the dependencies this package may use.
-dependencies = ["tendkit-detect", "tendkit-process", "tendkit-protocol", "serde_json"]
-
 [lints]
 workspace = true
 
