@@ -34,7 +34,16 @@ jobs:
       - uses: actions/checkout@v6
       - run: rustup default stable
       # shellrc's tests source a generated file in a real zsh.
-      - run: sudo apt-get install -y --no-install-recommends zsh
+      - name: Install test dependencies
+        run: |
+          # A refreshed package index and a few retries keep a flaky Ubuntu mirror from failing the job.
+          command -v zsh >/dev/null 2>&1 && exit 0
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh; then exit 0; fi
+            echo "apt-get failed (attempt $attempt of 3)." >&2
+            sleep 10
+          done
+          exit 1
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: core

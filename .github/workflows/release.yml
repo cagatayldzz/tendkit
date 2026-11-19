@@ -35,7 +35,15 @@ jobs:
           bash scripts/tests/run.sh
           cargo fmt --all -- --check
       - name: Install test dependencies
-        run: sudo apt-get install -y --no-install-recommends zsh
+        run: |
+          # A refreshed package index and a few retries keep a flaky Ubuntu mirror from failing the job.
+          command -v zsh >/dev/null 2>&1 && exit 0
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh; then exit 0; fi
+            echo "apt-get failed (attempt $attempt of 3)." >&2
+            sleep 10
+          done
+          exit 1
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: core
