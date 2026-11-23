@@ -27,6 +27,20 @@ fn status_color(status: StepStatus) -> Hsla {
   }
 }
 
+/// Engine diagnostics stay English; the ones a user can meet are shown translated.
+fn localized_message(message: String) -> String {
+  match message.as_str() {
+    "Release asset not found" => t("progress.msg_release_asset_missing"),
+    "A required dependency could not be installed" => t("progress.msg_dependency_failed"),
+    "Existing PATH settings were preserved because earlier steps did not complete." => t("progress.msg_path_preserved"),
+    "The downloaded artifact checksum does not match" => t("progress.msg_checksum_mismatch"),
+    "Could not verify the installed version" => t("progress.msg_verify_failed"),
+    "Release checksum is missing" => t("progress.msg_checksum_missing"),
+    "The release tag does not match the approved version" => t("progress.msg_tag_mismatch"),
+    _ => message,
+  }
+}
+
 impl Workspace {
   /// Opens the run progress as a dialog. It stays open while the plan runs, can
   /// only be left through Cancel, and is dismissed once the run has finished.
@@ -140,7 +154,9 @@ fn progress_body(model_entity: &Entity<AppModel>, cx: &App) -> impl IntoElement 
         .child(
           h_flex().gap_2().child(indicator(&step.id)).child(div().text_size(px(13.)).child(step.title.clone())).child(div().flex_1()).child(trailing),
         )
-        .when_some(result.and_then(|r| r.message.clone()), |this, message| this.child(div().text_size(px(11.)).text_color(orange()).child(message)));
+        .when_some(result.and_then(|r| r.message.clone()).map(localized_message), |this, message| {
+          this.child(div().text_size(px(11.)).text_color(orange()).child(message))
+        });
     }
     if plan.configure_shell {
       let shell = model.results.get("shell");
@@ -153,7 +169,9 @@ fn progress_body(model_entity: &Entity<AppModel>, cx: &App) -> impl IntoElement 
             .child(div().flex_1())
             .child(caption(shell.map(|r| step_status_label(r.status)).unwrap_or_else(|| pending("shell")), cx)),
         )
-        .when_some(shell.and_then(|r| r.message.clone()), |this, message| this.child(div().text_size(px(11.)).text_color(orange()).child(message)));
+        .when_some(shell.and_then(|r| r.message.clone()).map(localized_message), |this, message| {
+          this.child(div().text_size(px(11.)).text_color(orange()).child(message))
+        });
     }
   }
 

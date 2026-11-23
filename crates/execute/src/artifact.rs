@@ -73,7 +73,7 @@ pub(super) fn install(step: &InstallStep, work: &Path, destination: &Path, runne
   let (url, digest, member) = match step.recipe {
     Recipe::Bun | Recipe::Codex => {
       let (repo, tag, name, member) = if matches!(step.recipe, Recipe::Bun) {
-        let platform = if arch == "aarch64" { "arm64" } else { "x64" };
+        let platform = if arch == "aarch64" { "aarch64" } else { "x64" };
         let stem = format!("bun-darwin-{platform}");
         ("oven-sh/bun", format!("bun-v{}", step.target), format!("{stem}.zip"), format!("{stem}/bun"))
       } else {

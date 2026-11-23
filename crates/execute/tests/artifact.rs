@@ -95,7 +95,7 @@ struct ArchiveRunner {
 impl Runner for ArchiveRunner {
   fn metadata(&mut self, url: &str) -> Result<serde_json::Value, String> {
     let tag = url.rsplit('/').next().unwrap();
-    let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
+    let arch = if cfg!(target_arch = "aarch64") { "aarch64" } else { "x64" };
     let name = format!("bun-darwin-{arch}.zip");
     Ok(json!({"tag_name": tag, "assets": [{"name": name,
       "browser_download_url": format!("https://github.com/oven-sh/bun/releases/download/{tag}/{name}"),
