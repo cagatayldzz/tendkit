@@ -10,10 +10,8 @@ action="$(cat .github/actions/build-release/action.yml)"
 
 assert_contains "bash scripts/tests/run.sh" "$ci" "CI runs the shell tests"
 assert_contains "-D warnings" "$ci" "CI treats warnings as errors"
-if grep -Eq 'runs-on: (macos|windows)' <<<"$ci"; then
-  echo "FAIL: CI runs on Ubuntu only" >&2
-  failures=$((failures + 1))
-fi
+assert_contains "runs-on: macos" "$ci" "CI builds and tests the interface on macOS"
+assert_contains "runs-on: windows" "$ci" "CI builds the application on Windows"
 
 assert_contains "workflow_dispatch:" "$release" "release is started by hand"
 assert_contains "github.ref_name == github.event.repository.default_branch" "$release" "release runs from the default branch only"

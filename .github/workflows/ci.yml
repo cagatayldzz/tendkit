@@ -54,3 +54,60 @@ jobs:
         run: |
           cargo build --locked -p tendkit-engine
           cargo test --locked --workspace --exclude tendkit --exclude tendkit-ui --exclude tendkit-model
+
+  # The GPUI crates need a native runner. CI only needs them to compile and pass their tests,
+  # not fast or debuggable code: no debug info for this workspace's crates, and unoptimized
+  # dependencies (the development profile optimizes them for the application's sake).
+  interface:
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CI_CARGO_FLAGS: --locked --config profile.dev.package."*".opt-level=0 --config profile.dev.package."*".debug=false
+    steps:
+      - uses: actions/checkout@v6
+      - run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: interface-fast
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # A failing test must not leave the next run with a cold cache.
+          cache-on-failure: true
+          cache-workspace-crates: true
+      # One build profile for every step: `cargo clippy` after `cargo test` would compile each dependency twice.
+      - name: Build the interface crates
+        run: cargo test $CI_CARGO_FLAGS -p tendkit -p tendkit-ui -p tendkit-model --no-run
+      - name: Test
+        run: cargo test $CI_CARGO_FLAGS -p tendkit -p tendkit-ui -p tendkit-model
+
+  # Windows builds the whole workspace, application included, so a change that only breaks
+  # the Windows build is caught before a release.
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CI_CARGO_FLAGS: --locked --config profile.dev.package."*".opt-level=0 --config profile.dev.package."*".debug=false
+    steps:
+      - uses: actions/checkout@v6
+      - run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          rustup default stable
+        shell: bash
+      - name: Install Windows build dependencies
+        shell: bash
+        run: choco install protoc --yes --no-progress
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-fast
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+          cache-workspace-crates: true
+      - name: Build the application and the engine
+        shell: bash
+        run: cargo build $CI_CARGO_FLAGS -p tendkit-engine -p tendkit
+      - name: Test the Windows-relevant packages
+        shell: bash
+        run: cargo test $CI_CARGO_FLAGS -p tendkit-client -p tendkit-storage -p tendkit-protocol -p tendkit-updater -p tendkit-version -p tendkit-i18n
