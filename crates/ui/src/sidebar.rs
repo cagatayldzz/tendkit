@@ -5,12 +5,7 @@ use super::{
 use crate::platform;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-  component::{
-    h_flex,
-    sidebar::{Sidebar, SidebarMenu, SidebarMenuItem},
-    tag::Tag,
-    v_flex, ActiveTheme, Icon, IconName, Sizable, TitleBar,
-  },
+  component::{h_flex, v_flex, ActiveTheme, Icon, IconName, Sizable, TitleBar},
   *,
 };
 use gpui_kit_assets::IconName as Lucide;
@@ -23,7 +18,7 @@ impl Workspace {
     let stable = platform::channel() == "Stable";
     let model = self.model.read(cx);
     let tool_count = model.tools.len();
-    let items: Vec<_> = Destination::ALL
+    let items: Vec<AnyElement> = Destination::ALL
       .into_iter()
       .map(|destination| {
         let icon = match destination {
@@ -33,33 +28,57 @@ impl Workspace {
           Destination::Applications => Icon::new(Lucide::AppWindow),
           Destination::Settings => Icon::new(IconName::Settings),
         };
-        SidebarMenuItem::new(destination.title())
-          .icon(icon)
-          .active(self.destination == destination)
+        let selected = self.destination == destination;
+        let (selected_background, hover_background) = (theme.sidebar_accent, theme.list_hover);
+        h_flex()
+          .id(SharedString::from(format!("sidebar-{}", destination.title())))
+          .w_full()
+          .h_9()
+          .px_3()
+          .gap_3()
+          .items_center()
+          .rounded_md()
+          .cursor_pointer()
+          .text_sm()
+          .font_weight(if selected { FontWeight::MEDIUM } else { FontWeight::NORMAL })
+          .text_color(if selected { theme.foreground } else { theme.muted_foreground })
+          .when(selected, |row| row.bg(selected_background))
+          .when(!selected, |row| row.hover(move |row| row.bg(hover_background).text_color(theme.foreground)))
+          .child(icon.size_4())
+          .child(div().flex_1().child(destination.title()))
+          .when(destination.is_tool_catalog(), |row| {
+            row.child(div().px_2().rounded_full().bg(theme.border).text_color(theme.foreground).text_xs().child(tool_count.to_string()))
+          })
           .on_click(cx.listener(move |this, _, _, cx| this.navigate(destination, cx)))
-          .when(destination.is_tool_catalog(), |item| item.suffix(move |_, _| Tag::secondary().small().rounded_full().child(tool_count.to_string())))
+          .into_any_element()
       })
       .collect();
 
-    Sidebar::<SidebarMenu>::new("sidebar")
+    v_flex()
+      .id("sidebar")
       .w(px(224.))
-      .collapsible(false)
+      .h_full()
+      .flex_none()
+      .bg(theme.title_bar)
+      .border_r_1()
+      .border_color(theme.border)
       // The traffic lights sit in this band; it also drags the window.
-      .header(TitleBar::new().h(super::TOOLBAR_HEIGHT).bg(transparent_black()).border_b_0())
-      .child(SidebarMenu::new().children(items))
-      .footer(
-        v_flex().w_full().gap_2().child(
-          h_flex()
-            .id("channel")
-            .gap(px(6.))
-            .text_size(px(11.))
-            .text_color(theme.muted_foreground)
-            .child(div().size(px(5.)).rounded_full().bg(if stable { green() } else { orange() }))
-            .child(format!("{} · v{APP_VERSION}", platform::channel_label()))
-            .tooltip(|window, cx| {
-              component::tooltip::Tooltip::new(tf("channel.tooltip", &[("channel", &platform::channel_label())])).build(window, cx)
-            }),
-        ),
+      .child(TitleBar::new().h(super::TOOLBAR_HEIGHT).bg(transparent_black()).border_b_0())
+      .child(v_flex().flex_1().min_h_0().px_2().pt_2().gap_0p5().children(items))
+      .child(
+        h_flex()
+          .id("channel")
+          .px_4()
+          .py_3()
+          .gap(px(6.))
+          .items_center()
+          .text_xs()
+          .text_color(theme.muted_foreground)
+          .child(div().size(px(5.)).rounded_full().bg(if stable { green() } else { orange() }))
+          .child(format!("{} · v{APP_VERSION}", platform::channel_label()))
+          .tooltip(|window, cx| {
+            component::tooltip::Tooltip::new(tf("channel.tooltip", &[("channel", &platform::channel_label())])).build(window, cx)
+          }),
       )
   }
 }

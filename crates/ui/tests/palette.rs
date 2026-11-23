@@ -41,7 +41,7 @@ fn text_pairs_stay_readable_in_both_themes() {
 #[test]
 fn surfaces_are_distinguishable_from_the_page_in_the_dark_theme() {
   let c = themed(true);
-  assert!(luminance(c.sidebar) < luminance(c.background));
+  assert!(luminance(c.title_bar) < luminance(c.background));
   assert!(luminance(c.group_box) > luminance(c.background));
   assert!(contrast(c.border, c.background) >= 1.2);
 }

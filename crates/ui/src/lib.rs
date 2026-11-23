@@ -29,7 +29,7 @@ use gpui_kit::{
   },
   *,
 };
-use std::time::SystemTime;
+use std::{borrow::Cow, time::SystemTime};
 use tendkit_i18n::{t, tf};
 use tendkit_model::{AppModel, AppUpdate, ThemeChoice, APP_UPDATES_ENABLED};
 
@@ -42,7 +42,23 @@ const CONTEXT: &str = "Workspace";
 /// Shared toolbar height; the sidebar starts below the same band.
 pub const TOOLBAR_HEIGHT: Pixels = px(60.);
 
-/// Follows the system appearance and applies the GitHub Desktop palette.
+/// The Geist typeface (SIL Open Font License, see `assets/fonts/OFL.txt`).
+const GEIST: [&[u8]; 4] = [
+  include_bytes!("../assets/fonts/Geist-Regular.ttf"),
+  include_bytes!("../assets/fonts/Geist-Medium.ttf"),
+  include_bytes!("../assets/fonts/Geist-SemiBold.ttf"),
+  include_bytes!("../assets/fonts/Geist-Bold.ttf"),
+];
+
+/// Makes Geist the interface font. Without it the system font stays, so a failure is only logged.
+pub fn install_fonts(cx: &mut App) {
+  match cx.text_system().add_fonts(GEIST.iter().map(|font| Cow::Borrowed(*font)).collect()) {
+    Ok(()) => {}
+    Err(error) => eprintln!("Could not load the Geist font: {error}"),
+  }
+}
+
+/// Follows the system appearance and applies the GitHub Primer palette.
 fn apply_theme(choice: ThemeChoice, window: &mut Window, cx: &mut App) {
   match choice {
     ThemeChoice::System => Theme::sync_system_appearance(Some(window), cx),
@@ -51,7 +67,7 @@ fn apply_theme(choice: ThemeChoice, window: &mut Window, cx: &mut App) {
   }
   Theme::update(cx, |theme| {
     let dark = theme.is_dark();
-    palette::apply(&mut theme.colors, dark);
+    palette::apply_theme(theme, dark);
   });
   window.refresh();
 }

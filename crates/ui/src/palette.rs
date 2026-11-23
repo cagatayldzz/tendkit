@@ -1,7 +1,13 @@
-//! The GitHub Desktop colour palette, applied over GPUI Kit's theme tokens.
+//! The GitHub Primer colour palette (shared with gcode), applied over GPUI Kit's theme tokens.
 
-use gpui_kit::{component::ThemeColor, *};
+use gpui_kit::{
+  component::{Theme, ThemeColor},
+  *,
+};
 use std::sync::atomic::{AtomicBool, Ordering};
+
+/// The interface font, bundled with the application (see `install_fonts`).
+const FONT_FAMILY: &str = "Geist";
 
 static DARK: AtomicBool = AtomicBool::new(true);
 
@@ -54,8 +60,10 @@ fn contrast(a: Hsla, b: Hsla) -> f32 {
 /// The handful of colours every other token is derived from.
 struct Palette {
   background: Hsla,
-  /// Toolbar, sidebar, and other chrome above the content.
+  /// Sidebar, popovers and other chrome beside the content.
   chrome: Hsla,
+  /// The title band.
+  rail: Hsla,
   /// Cards and grouped content, one step above the page background.
   surface: Hsla,
   /// Raised controls and hovered rows.
@@ -63,6 +71,10 @@ struct Palette {
   border: Hsla,
   foreground: Hsla,
   muted_foreground: Hsla,
+  /// Primary action buttons (green, as in gcode and AppForge).
+  action: Hsla,
+  action_hover: Hsla,
+  action_active: Hsla,
   accent: Hsla,
   /// The accent as text or a thin line on the page background.
   accent_text: Hsla,
@@ -81,45 +93,53 @@ struct Palette {
 impl Palette {
   fn dark() -> Self {
     Self {
-      background: hex(0x1f2428),
-      chrome: hex(0x171b1f),
-      surface: hex(0x272d34),
-      raised: hex(0x323941),
-      border: hex(0x30363d),
-      foreground: hex(0xe1e4e8),
-      muted_foreground: hex(0x959da5),
-      accent: hex(0x2a63d6),
-      accent_text: hex(0x58a6ff),
-      accent_hover: hex(0x3470e8),
-      accent_active: hex(0x2253b8),
-      success: hex(0x34d058),
-      danger: hex(0xf97583),
-      warning: hex(0xffd33d),
-      selection: hex(0x2a63d6).opacity(0.45),
-      sidebar_selected: hex(0x2557c0),
-      sidebar_selected_foreground: white(),
+      background: hex(0x0d1117),
+      chrome: hex(0x0d1117),
+      rail: hex(0x010409),
+      surface: hex(0x151b23),
+      raised: hex(0x212830),
+      border: hex(0x252c35),
+      foreground: hex(0xf0f6fc),
+      muted_foreground: hex(0x9198a1),
+      action: hex(0x238636),
+      action_hover: hex(0x29903b),
+      action_active: hex(0x216e39),
+      accent: hex(0x1f6feb),
+      accent_text: hex(0x4493f8),
+      accent_hover: hex(0x1c62d2),
+      accent_active: hex(0x1158c7),
+      success: hex(0x3fb950),
+      danger: hex(0xf85149),
+      warning: hex(0xd29922),
+      selection: hex(0x1f6feb).opacity(0.45),
+      sidebar_selected: hex(0x172b45),
+      sidebar_selected_foreground: hex(0xf0f6fc),
     }
   }
 
   fn light() -> Self {
     Self {
       background: hex(0xffffff),
-      chrome: hex(0xf6f8fa),
+      chrome: hex(0xffffff),
+      rail: hex(0xf6f8fa),
       surface: hex(0xf6f8fa),
-      raised: hex(0xeaecef),
-      border: hex(0xe1e4e8),
-      foreground: hex(0x24292e),
-      muted_foreground: hex(0x586069),
-      accent: hex(0x0366d6),
-      accent_text: hex(0x0366d6),
-      accent_hover: hex(0x035fc7),
-      accent_active: hex(0x0256b4),
+      raised: hex(0xeaeef2),
+      border: hex(0xe2e7ec),
+      foreground: hex(0x1f2328),
+      muted_foreground: hex(0x59636e),
+      action: hex(0x1f883d),
+      action_hover: hex(0x1a7f37),
+      action_active: hex(0x116329),
+      accent: hex(0x0969da),
+      accent_text: hex(0x0969da),
+      accent_hover: hex(0x0759bd),
+      accent_active: hex(0x0550ae),
       success: hex(0x1a7f37),
-      danger: hex(0xcb2431),
-      warning: hex(0xdbab09),
-      selection: hex(0x0366d6).opacity(0.25),
-      sidebar_selected: hex(0xdbe9f9),
-      sidebar_selected_foreground: hex(0x044289),
+      danger: hex(0xd1242f),
+      warning: hex(0x9a6700),
+      selection: hex(0x0969da).opacity(0.25),
+      sidebar_selected: hex(0xddf4ff),
+      sidebar_selected_foreground: hex(0x0550ae),
     }
   }
 
@@ -128,7 +148,7 @@ impl Palette {
     colors.background = self.background;
     colors.foreground = self.foreground;
     colors.border = self.border;
-    colors.input = self.muted_foreground.opacity(0.45);
+    colors.input = self.border;
     colors.muted = self.surface;
     colors.muted_foreground = self.muted_foreground;
     colors.accent = self.raised;
@@ -152,10 +172,10 @@ impl Palette {
     colors.primary_hover = self.accent_hover;
     colors.primary_active = self.accent_active;
     colors.primary_foreground = on(self.accent);
-    colors.button_primary = self.accent;
-    colors.button_primary_hover = self.accent_hover;
-    colors.button_primary_active = self.accent_active;
-    colors.button_primary_foreground = on(self.accent);
+    colors.button_primary = self.action;
+    colors.button_primary_hover = self.action_hover;
+    colors.button_primary_active = self.action_active;
+    colors.button_primary_foreground = white;
     colors.secondary = self.raised;
     colors.secondary_hover = self.raised.opacity(0.85);
     colors.secondary_active = self.raised.opacity(0.7);
@@ -193,9 +213,9 @@ impl Palette {
     colors.sidebar_accent_foreground = self.sidebar_selected_foreground;
     colors.sidebar_primary = self.accent;
     colors.sidebar_primary_foreground = white;
-    colors.title_bar = self.background;
+    colors.title_bar = self.rail;
     colors.title_bar_border = self.border;
-    colors.status_bar = self.chrome;
+    colors.status_bar = self.surface;
     colors.status_bar_border = self.border;
     colors.tab_bar = self.chrome;
     colors.tab = self.chrome;
@@ -229,7 +249,7 @@ impl Palette {
   }
 }
 
-/// Applies the dark or light GitHub Desktop palette to the theme colours.
+/// Applies the dark or light GitHub Primer palette to the theme colours.
 pub fn apply(colors: &mut ThemeColor, dark: bool) {
   DARK.store(dark, Ordering::Relaxed);
   if dark {
@@ -237,6 +257,15 @@ pub fn apply(colors: &mut ThemeColor, dark: bool) {
   } else {
     Palette::light().apply(colors);
   }
+}
+
+/// Applies the palette, the corner radii and the interface font to the theme.
+pub fn apply_theme(theme: &mut Theme, dark: bool) {
+  // Dialogs and notifications use the large radius; fields, buttons and menu items the small one.
+  theme.radius = px(6.);
+  theme.radius_lg = px(10.);
+  theme.font_family = FONT_FAMILY.into();
+  apply(&mut theme.colors, dark);
 }
 
 #[cfg(test)]

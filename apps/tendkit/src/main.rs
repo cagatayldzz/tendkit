@@ -6,7 +6,7 @@ use gpui_kit::{component::TitleBar, *};
 use tendkit_i18n::t;
 use tendkit_model::AppModel;
 use tendkit_storage::WindowSize;
-use tendkit_ui::{Assets, Hide, HideOthers, Minimize, Quit, ScanAgain, ShowAll, Workspace, Zoom, TOOLBAR_HEIGHT};
+use tendkit_ui::{install_fonts, Assets, Hide, HideOthers, Minimize, Quit, ScanAgain, ShowAll, Workspace, Zoom, TOOLBAR_HEIGHT};
 
 /// Shared handles for application-level actions such as Quit.
 struct AppState {
@@ -19,6 +19,7 @@ impl Global for AppState {}
 fn main() {
   gpui_kit::application().with_assets(Assets).run(|cx| {
     gpui_kit::init(cx);
+    install_fonts(cx);
     cx.activate(true);
     bind_keys(cx);
 
