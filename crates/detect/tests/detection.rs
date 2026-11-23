@@ -1,5 +1,13 @@
 use super::*;
 
+/// Linux refuses to execute a file while any process still holds it open for writing, and a fork in another test
+/// thread inherits that descriptor for a moment ("Text file busy"). Tests that write an executable and run it therefore
+/// take turns.
+fn exclusive() -> std::sync::MutexGuard<'static, ()> {
+  static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+  LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 #[test]
 fn parses_actual_cli_formats() {
   for (raw, expected) in [
@@ -18,6 +26,7 @@ fn parses_actual_cli_formats() {
 
 #[test]
 fn detects_rustup_hard_link_proxies_in_custom_cargo_home() {
+  let _exclusive = exclusive();
   let root = env::temp_dir().join(format!("tendkit-rustup-{}", std::process::id()));
   fs::create_dir_all(&root).unwrap();
   let rustup = root.join("rustup");
@@ -42,6 +51,7 @@ fn recognizes_python_installation_sources() {
 
 #[test]
 fn detects_symlinks_once_and_preserves_unreadable_versions() {
+  let _exclusive = exclusive();
   let root = env::temp_dir().join(format!("tendkit-test-{}", std::process::id()));
   fs::create_dir_all(&root).unwrap();
   let binary = root.join("fixture");
@@ -63,6 +73,7 @@ fn detects_symlinks_once_and_preserves_unreadable_versions() {
 
 #[test]
 fn probes_run_concurrently_and_keep_search_order() {
+  let _exclusive = exclusive();
   let root = env::temp_dir().join(format!("tendkit-parallel-{}", std::process::id()));
   let dirs: Vec<_> = (0..3).map(|i| root.join(i.to_string())).collect();
   for (i, dir) in dirs.iter().enumerate() {
@@ -82,6 +93,7 @@ fn probes_run_concurrently_and_keep_search_order() {
 
 #[test]
 fn hanging_probe_times_out() {
+  let _exclusive = exclusive();
   let root = env::temp_dir().join(format!("tendkit-timeout-{}", std::process::id()));
   fs::create_dir_all(&root).unwrap();
   let binary = root.join("hang");
