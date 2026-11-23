@@ -1,6 +1,7 @@
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::{
   fs,
-  os::unix::fs::PermissionsExt,
   path::{Path, PathBuf},
   sync::{Arc, Mutex},
 };
@@ -144,6 +145,7 @@ fn fixture_plan() -> InstallPlan {
   }
 }
 
+#[cfg(unix)]
 fn make_fixture(control: &str, event: &str, status: &str) -> PathBuf {
   let path = temp_path("protocol").with_extension("sh");
   let script = r#"#!/bin/bash
@@ -172,6 +174,7 @@ send "$sequence" run_finished '{"status":"STATUS"}'
   path
 }
 
+#[cfg(unix)]
 fn run_fixture(control: &str, trigger: EventType, status: &str) -> Vec<EngineEvent> {
   let _spawn = spawn_lock();
   let event_name = if control == "continue" { "external_action_required" } else { "log" };
@@ -194,12 +197,14 @@ fn run_fixture(control: &str, trigger: EventType, status: &str) -> Vec<EngineEve
   Arc::try_unwrap(events).unwrap().into_inner().unwrap()
 }
 
+#[cfg(unix)]
 #[test]
 fn installer_acknowledgement_streams_without_waiting_for_eof() {
   let events = run_fixture("continue", EventType::ExternalActionRequired, "succeeded");
   assert_eq!(events.last().unwrap().data.status.as_deref(), Some("succeeded"));
 }
 
+#[cfg(unix)]
 #[test]
 fn cancellation_reaches_engine_over_control_pipe() {
   let events = run_fixture("cancel", EventType::Log, "cancelled");

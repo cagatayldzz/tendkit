@@ -1,6 +1,7 @@
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::{
   fs,
-  os::unix::fs::PermissionsExt,
   path::PathBuf,
   time::{Duration, UNIX_EPOCH},
 };
@@ -12,6 +13,7 @@ fn temp_path(name: &str) -> PathBuf {
   std::env::temp_dir().join(format!("tendkit-{name}-{}-{n}", std::process::id()))
 }
 
+#[cfg(unix)]
 fn permissions(path: &PathBuf) -> u32 {
   fs::metadata(path).unwrap().permissions().mode() & 0o777
 }
@@ -75,6 +77,7 @@ fn opencommit_config_saves_privately_and_round_trips() {
   config.set("OCO_LANGUAGE", Some("en"));
   config.save(&path).unwrap();
   assert_eq!(OpenCommitConfig::load(&path).unwrap(), config);
+  #[cfg(unix)]
   assert_eq!(permissions(&path), 0o600);
   let _ = fs::remove_file(path);
 }
@@ -102,6 +105,7 @@ fn shell_context_rejects_duplicate_or_incomplete_blocks() {
   assert!(shell_context::instruction("# >>> TendKit OpenCommit >>>\n").is_err());
 }
 
+#[cfg(unix)]
 #[test]
 fn shell_context_saves_with_backup_and_keeps_permissions() {
   let directory = temp_path("zshrc");
