@@ -103,7 +103,8 @@ jobs:
   macos_checks:
     name: 3 · macOS checks
     needs: prepare
-    runs-on: macos-26
+    # The Intel runner pool has spare capacity; the arm64 pool queues for a long time and can fail to hand out a job.
+    runs-on: macos-15-intel
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
