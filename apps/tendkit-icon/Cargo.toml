@@ -8,7 +8,7 @@ repository.workspace = true
 description = "Development tool for rendering TendKit app icons"
 
 [dependencies]
-resvg = { version = "0.46", default-features = false }
+resvg = { version = "0.50", default-features = false }
 
 [lints]
 workspace = true

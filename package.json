@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bash scripts/dev.sh",
     "build": "bash scripts/build-app.sh release",
-    "update": "cargo update",
+    "update": "cargo upgrade --incompatible && cargo update",
     "check": "bash scripts/tests/run.sh && cargo fmt --all -- --check && cargo clippy --locked --workspace --all-targets -- -D warnings && bash scripts/test.sh",
     "test": "bash scripts/tests/run.sh && bash scripts/test.sh",
     "icons": "bash scripts/make-icns.sh",

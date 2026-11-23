@@ -25,9 +25,9 @@ tendkit-updater = { path = "crates/updater" }
 tendkit-model = { path = "crates/model" }
 tendkit-ui = { path = "crates/ui" }
 futures = "0.3"
-gpui-kit = "0.8.0"
-gpui-kit-assets = "0.8.0"
-libc = "0.2.190"
+gpui-kit = "0.11.0"
+gpui-kit-assets = "0.11.0"
+libc = "0.2.191"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
