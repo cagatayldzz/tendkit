@@ -5,7 +5,7 @@ use super::{
 use crate::platform;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-  component::{h_flex, v_flex, ActiveTheme, Icon, IconName, Sizable, TitleBar},
+  component::{h_flex, v_flex, ActiveTheme, Icon, IconName, TitleBar},
   *,
 };
 use gpui_kit_assets::IconName as Lucide;
@@ -29,7 +29,7 @@ impl Workspace {
           Destination::Settings => Icon::new(IconName::Settings),
         };
         let selected = self.destination == destination;
-        let (selected_background, hover_background) = (theme.sidebar_accent, theme.list_hover);
+        let (selected_background, hover_background, foreground) = (theme.sidebar_accent, theme.list_hover, theme.foreground);
         h_flex()
           .id(SharedString::from(format!("sidebar-{}", destination.title())))
           .w_full()
@@ -43,7 +43,7 @@ impl Workspace {
           .font_weight(if selected { FontWeight::MEDIUM } else { FontWeight::NORMAL })
           .text_color(if selected { theme.foreground } else { theme.muted_foreground })
           .when(selected, |row| row.bg(selected_background))
-          .when(!selected, |row| row.hover(move |row| row.bg(hover_background).text_color(theme.foreground)))
+          .when(!selected, |row| row.hover(move |row| row.bg(hover_background).text_color(foreground)))
           .child(icon.size_4())
           .child(div().flex_1().child(destination.title()))
           .when(destination.is_tool_catalog(), |row| {
