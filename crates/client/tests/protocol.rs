@@ -1,13 +1,13 @@
 #[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
+use std::{fs, os::unix::fs::PermissionsExt, sync::Arc};
 use std::{
-  fs,
   path::{Path, PathBuf},
-  sync::{Arc, Mutex},
+  sync::Mutex,
 };
 use tendkit_client::{EngineConnection, EventValidator, Request};
 use tendkit_protocol::{EngineEvent, EngineFailure, EventDecoder, EventType, InstallPlan, InstallStep, Recipe, StepAction, TOOL_IDS};
 
+#[cfg(unix)]
 fn temp_path(name: &str) -> PathBuf {
   static COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
   let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -24,7 +24,7 @@ fn spawn_lock() -> std::sync::MutexGuard<'static, ()> {
 }
 
 fn engine_path() -> PathBuf {
-  let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/tendkit-engine");
+  let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../target/debug/tendkit-engine{}", std::env::consts::EXE_SUFFIX));
   assert!(path.is_file(), "Build the Rust engine first: cargo build -p tendkit-engine");
   path
 }
@@ -276,8 +276,13 @@ fn actual_rust_executor_rejects_installation_on_unsupported_platforms() {
   let _spawn = spawn_lock();
   let request = Request::new("execute").configure_shell(false).plan(fixture_plan());
   let result = EngineConnection::new().run(&request, Some(&engine_path()), |_| {});
+  let expected = if cfg!(windows) {
+    "Tool installation on Windows is not supported by this build. Use the tool's original package manager."
+  } else {
+    "Tool installation is currently supported on macOS only."
+  };
   assert!(
-    matches!(&result, Err(EngineFailure::Failed(message)) if message == "Tool installation is currently supported on macOS only."),
+    matches!(&result, Err(EngineFailure::Failed(message)) if message == expected),
     "Expected an explicit platform rejection, received: {result:?}"
   );
 }
