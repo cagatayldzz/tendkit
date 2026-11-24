@@ -82,9 +82,7 @@ jobs:
             exit 1
           fi
       - name: Generate release notes
-        run: |
-          bash scripts/release.sh notes
-          cat docs/platform-support.md >> dist/RELEASE_NOTES.md
+        run: bash scripts/release.sh notes
       - name: Preserve versioned build inputs
         uses: actions/upload-artifact@v7
         with:
@@ -95,7 +93,6 @@ jobs:
             package.json
             apps/tendkit/macos/Info.plist
             dist/RELEASE_NOTES.md
-
 
   # The macOS application is checked in parallel with the builds instead of
   # compiling the GPUI tree a second and third time inside each build job. The
